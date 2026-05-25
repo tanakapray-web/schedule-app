@@ -275,7 +275,7 @@ function renderDay(d){
   if(!chiefs.length&&!staff.length)h='<div style="text-align:center;padding:3rem;color:#bbb;font-size:14px">管理画面からチーフ・スタッフを追加してください</div>';
   document.getElementById('view-area').innerHTML=h;
 }
-function toggleStaff(dk,si){const ss=getSsched(S.deptIdx),key=`${dk}__${si}`,cur=ss[key]||'';ss[key]=cur===''?'出勤':cur==='出勤'?'休日':'';render()}
+function toggleStaff(dk,si){const ss=getSsched(S.deptIdx),key=`${dk}__${si}`,cur=ss[key]||'';ss[key]=cur===''?'出勤':cur==='出勤'?'休日':'';render();saveData()}
 let editCtx=null;
 function colorSwatchHTML(sel){return ECOLORS.map((c,i)=>`<div class="color-swatch${i===sel?' selected':''}" style="background:${c.dot}" onclick="selColor(${i})" title="${c.label}"></div>`).join('')}
 function mHTML(title,body){return`<div class="modal-handle"></div><h3>${title}</h3>${body}`}
@@ -312,16 +312,16 @@ function saveEntry(){
   const di=S.deptIdx,dk=document.getElementById('f-date').value,mi=parseInt(document.getElementById('f-member')?.value||0);
   const name=document.getElementById('f-name').value.trim();if(!name)return;
   const start=getTime('f-start'),end=getTime('f-end'),note=document.getElementById('f-note').value.trim(),color=parseInt(document.getElementById('f-color').value||0);
-  const sched=getCsched(di),key=`${dk}__${mi}`;if(!sched[key])sched[key]=[];sched[key].push({name,start,end,note,color});closeModal();render();
+  const sched=getCsched(di),key=`${dk}__${mi}`;if(!sched[key])sched[key]=[];sched[key].push({name,start,end,note,color});closeModal();render();saveData();
 }
 function updateEntry(){
   if(!editCtx)return;const{dk,mi,origIdx}=editCtx;const name=document.getElementById('f-name').value.trim();if(!name)return;
   const start=getTime('f-start'),end=getTime('f-end'),note=document.getElementById('f-note').value.trim(),color=parseInt(document.getElementById('f-color').value||0);
-  getCsched(S.deptIdx)[`${dk}__${mi}`][origIdx]={name,start,end,note,color};closeModal();render();
+  getCsched(S.deptIdx)[`${dk}__${mi}`][origIdx]={name,start,end,note,color};closeModal();render();saveData();
 }
 function deleteEntry(){
   if(!editCtx)return;const{dk,mi,origIdx}=editCtx,sched=getCsched(S.deptIdx),key=`${dk}__${mi}`;
-  sched[key].splice(origIdx,1);if(!sched[key].length)delete sched[key];closeModal();render();
+  sched[key].splice(origIdx,1);if(!sched[key].length)delete sched[key];closeModal();render();saveData();
 }
 function openSettings(){
   document.getElementById('modal-box').innerHTML=mHTML('管理',`<div id="set-tabs" style="display:flex;gap:6px;margin-bottom:1rem"><button class="btn active" id="st-store" onclick="setTab('store')">店舗・部署</button><button class="btn" id="st-chief" onclick="setTab('chief')">チーフ</button><button class="btn" id="st-staff" onclick="setTab('staff')">スタッフ</button></div><div id="set-body"></div>`);
