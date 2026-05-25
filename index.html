@@ -115,6 +115,7 @@ th,td{border:0.5px solid #e0ded8}
     <select id="dept-sel" onchange="changeDept()" style="width:auto;max-width:160px;font-size:13px;padding:7px 28px 7px 10px"></select>
     <button class="btn" onclick="openSettings()"><i class="ti ti-settings"></i> <span class="btn-label">管理</span></button>
     <button class="btn save-btn" onclick="saveData()"><i class="ti ti-cloud-upload"></i> <span class="btn-label">保存</span></button>
+    <button class="btn" onclick="exportExcel()"><i class="ti ti-download"></i> <span class="btn-label">出力</span></button>
   </div>
   <div class="status-bar" id="status-bar">読み込み中...</div>
   <div class="nav">
@@ -374,6 +375,63 @@ function closeModal(){document.getElementById('modal-bg').style.display='none';r
 function closeBg(e){if(e.target.id==='modal-bg')closeModal()}
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
 loadData();
+</script>
+<script>
+function exportExcel(){
+  const di=S.deptIdx,chiefs=getChiefs(di),staff=getStaff(di),csched=getCsched(di),ssched=getSsched(di);
+  const base=getBase();
+  let dates=[];
+  if(S.view==='week'){
+    const mon=base;
+    dates=Array.from({length:7},(_,i)=>{const d=new Date(mon);d.setDate(d.getDate()+i);return d});
+  }else if(S.view==='month'){
+    const year=base.getFullYear(),month=base.getMonth();
+    const lastDay=new Date(year,month+1,0).getDate();
+    dates=Array.from({length:lastDay},(_,i)=>new Date(year,month,i+1));
+  }else{
+    dates=[base];
+  }
+
+  let csv='\uFEFF日付,曜日';
+  chiefs.forEach(m=>csv+=`,${m.name}（現場）,${m.name}（時間）,${m.name}（備考）`);
+  staff.forEach(s=>csv+=`,${s.name}`);
+  csv+='\n';
+
+  dates.forEach(d=>{
+    const dk=dateKey(d);
+    const maxEntries=Math.max(1,...chiefs.map((_,mi)=>(csched[`${dk}__${mi}`]||[]).length));
+    for(let ei=0;ei<maxEntries;ei++){
+      csv+=ei===0?`${fmtS(d)},${fmtDow(d)}`:`${fmtS(d)},`;
+      chiefs.forEach((_,mi)=>{
+        const entries=sortE(csched[`${dk}__${mi}`]||[]);
+        const e=entries[ei];
+        if(e){
+          const time=e.start?(e.end?`${e.start}〜${e.end}`:`${e.start}〜`):'';
+          csv+=`,"${e.name}","${time}","${e.note||''}"`;
+        }else{
+          csv+=',,,';
+        }
+      });
+      if(ei===0){
+        staff.forEach((_,si)=>{
+          const v=ssched[`${dk}__${si}`]||'';
+          csv+=`,"${v}"`;
+        });
+      }else{
+        staff.forEach(()=>csv+=',');
+      }
+      csv+='\n';
+    }
+  });
+
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download=`schedule_${fmtS(base).replace('/','')}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 </script>
 </body>
 </html>
