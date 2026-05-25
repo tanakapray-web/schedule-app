@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>スケジュール管理</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f8f7f4;color:#1a1a1a;padding-bottom:70px}
+.app{max-width:1200px;margin:0 auto;padding:12px 12px 0}
+.topbar{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+.topbar h2{font-size:16px;font-weight:500;flex:1;min-width:80px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.btn{font-size:13px;padding:8px 12px;border-radius:8px;border:0.5px solid #ccc;background:transparent;color:#1a1a1a;cursor:pointer;display:inline-flex;align-items:center;gap:4px;white-space:nowrap;min-height:40px;touch-action:manipulation}
+.btn:active{opacity:.7}
+.btn:hover{background:#f0efec}
+.btn.primary{background:#e6f1fb;color:#0c447c;border-color:#b5d4f4}
+.btn.danger{color:#a32d2d;border-color:#f09595}
+.btn.danger:active{background:#fcebeb}
+.btn.active{background:#f0efec;font-weight:500}
+.btn.save-btn{background:#1d9e75;color:#fff;border-color:#0f6e56}
+select,input[type=text],textarea{font-size:16px;padding:10px 12px;border-radius:8px;border:0.5px solid #ccc;background:#fff;color:#1a1a1a;width:100%;-webkit-appearance:none}
+textarea{resize:vertical;min-height:70px;font-family:inherit}
+select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24'%3E%3Cpath fill='%23888' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:32px}
+.nav{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.nav-label{font-size:14px;font-weight:500;flex:1;text-align:center}
+.nav .btn{min-width:44px;justify-content:center}
+.view-tabs{display:flex;gap:4px;margin-left:auto}
+.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:0.5px solid #e0ded8;z-index:100;padding:8px 0;padding-bottom:max(8px,env(safe-area-inset-bottom))}
+.bottom-nav-inner{display:flex;justify-content:space-around}
+.bnav-btn{display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 20px;border:none;background:none;color:#888;font-size:10px;cursor:pointer;border-radius:8px;touch-action:manipulation;min-width:72px}
+.bnav-btn i{font-size:22px}
+.bnav-btn.active{color:#185fa5}
+.bnav-btn:active{opacity:.6}
+.table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border:0.5px solid #e0ded8;border-radius:12px;background:#fff}
+table{border-collapse:collapse;width:100%}
+th,td{border:0.5px solid #e0ded8}
+.th-date{min-width:54px;padding:8px;background:#f8f7f4;font-size:11px;font-weight:500;color:#888;position:sticky;left:0;z-index:2;text-align:left}
+.th-chief{min-width:88px;padding:8px 6px;background:#f8f7f4;text-align:center;font-size:11px;font-weight:500}
+.th-staff{width:40px;min-width:40px;max-width:40px;padding:6px 2px;background:#f1efe8;text-align:center;font-size:10px;font-weight:500;color:#5f5e5a;overflow:hidden}
+.th-section{padding:5px 6px;font-size:11px;font-weight:500;text-align:center}
+.avatar{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;margin:0 auto 3px;color:#fff}
+.td-date{padding:8px;background:#f8f7f4;font-size:12px;color:#888;position:sticky;left:0;z-index:1;white-space:nowrap;vertical-align:top}
+.td-date.today-c{color:#185fa5;font-weight:500}
+.td-date.weekend{background:#f1efe8}
+.td-chief{padding:4px;vertical-align:top;min-width:88px}
+.td-chief.weekend{background:#faf9f6}
+.td-staff{width:40px;min-width:40px;max-width:40px;padding:4px 2px;text-align:center;vertical-align:middle;cursor:pointer;overflow:hidden}
+.td-staff.weekend{background:#faf9f6}
+.td-staff:active{background:#e0ded8}
+.entry{border-radius:4px;padding:4px 6px;font-size:11px;margin-bottom:3px;cursor:pointer;text-align:left;line-height:1.4;word-break:break-all;min-height:32px}
+.entry:active{opacity:.7}
+.add-cell{display:block;width:100%;padding:6px;font-size:14px;color:#ccc;background:none;border:none;cursor:pointer;text-align:center;border-radius:4px;min-height:36px;touch-action:manipulation}
+.add-cell:active{background:#f0efec}
+.staff-badge{display:inline-block;border-radius:3px;padding:2px 5px;font-size:10px;font-weight:500;white-space:nowrap}
+.badge-on{background:#e1f5ee;color:#085041}
+.badge-off{background:#f1efe8;color:#5f5e5a}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.4);display:flex;align-items:flex-end;justify-content:center;z-index:200}
+.modal{background:#fff;border-radius:20px 20px 0 0;padding:16px;width:100%;max-width:500px;max-height:92vh;overflow-y:auto;padding-bottom:max(20px,env(safe-area-inset-bottom))}
+.modal-handle{width:40px;height:4px;background:#e0ded8;border-radius:2px;margin:0 auto 16px}
+.modal h3{font-size:17px;font-weight:600;margin-bottom:1rem}
+.field{margin-bottom:14px}
+.field label{font-size:13px;color:#888;display:block;margin-bottom:6px;font-weight:500}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.time-row{display:flex;align-items:center;gap:6px}
+.time-row select{flex:1}
+.time-sep{font-size:16px;color:#888;flex-shrink:0;font-weight:500}
+.modal-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+.modal-btns .btn{min-height:44px;padding:10px 16px;font-size:14px}
+.color-row{display:flex;gap:10px;margin-top:6px;flex-wrap:wrap}
+.color-swatch{width:32px;height:32px;border-radius:50%;cursor:pointer;border:3px solid transparent;touch-action:manipulation}
+.color-swatch.selected{border-color:#1a1a1a}
+.color-swatch:active{transform:scale(1.1)}
+.chip{display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border-radius:20px;border:0.5px solid #ccc;font-size:13px;margin:3px}
+.chip button{background:none;border:none;cursor:pointer;color:#888;font-size:14px;line-height:1;min-width:28px;min-height:28px;display:flex;align-items:center;justify-content:center}
+.chip button:active{color:#a32d2d}
+.store-block{border:0.5px solid #e0ded8;border-radius:10px;padding:12px;margin-bottom:10px}
+.inline-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.day-section-label{font-size:13px;font-weight:500;color:#888;margin:14px 0 8px}
+.day-chief-row{border:0.5px solid #e0ded8;border-radius:12px;margin-bottom:10px;overflow:hidden}
+.day-chief-head{padding:10px 14px;background:#f8f7f4;font-size:14px;font-weight:500;display:flex;align-items:center;gap:8px}
+.day-entries-wrap{display:flex;flex-wrap:wrap;gap:8px;padding:10px 14px}
+.day-entry-card{border-radius:8px;padding:8px 12px;font-size:13px;cursor:pointer;min-width:100px;max-width:180px;line-height:1.5;touch-action:manipulation}
+.day-entry-card:active{opacity:.7}
+.staff-day-card{border:0.5px solid #e0ded8;border-radius:12px;overflow:hidden;margin-bottom:10px}
+.staff-day-row{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:0.5px solid #e0ded8;font-size:14px;cursor:pointer;min-height:52px;touch-action:manipulation}
+.staff-day-row:last-child{border-bottom:none}
+.staff-day-row:active{background:#f8f7f4}
+.status-bar{font-size:11px;color:#888;padding:4px 0 8px;text-align:right}
+.status-bar.saving{color:#ba7517}
+.status-bar.saved{color:#0f6e56}
+.status-bar.error{color:#a32d2d}
+.fab{display:none;position:fixed;right:16px;bottom:80px;width:56px;height:56px;border-radius:50%;background:#185fa5;color:#fff;border:none;font-size:28px;cursor:pointer;z-index:99;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(24,95,165,.4);touch-action:manipulation}
+.fab:active{opacity:.8;transform:scale(.95)}
+@media(max-width:600px){
+  body{padding-bottom:80px}
+  .bottom-nav{display:block}
+  .fab{display:flex}
+  .view-tabs{display:none}
+  .topbar h2{font-size:14px}
+  .topbar .btn-label{display:none}
+}
+@media(min-width:600px){
+  .modal-bg{align-items:center}
+  .modal{border-radius:16px;padding:20px;max-width:460px}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <h2 id="page-title">スケジュール</h2>
+    <select id="dept-sel" onchange="changeDept()" style="width:auto;max-width:160px;font-size:13px;padding:7px 28px 7px 10px"></select>
+    <button class="btn" onclick="openSettings()"><i class="ti ti-settings"></i> <span class="btn-label">管理</span></button>
+    <button class="btn save-btn" onclick="saveData()"><i class="ti ti-cloud-upload"></i> <span class="btn-label">保存</span></button>
+  </div>
+  <div class="status-bar" id="status-bar">読み込み中...</div>
+  <div class="nav">
+    <button class="btn" onclick="shiftPeriod(-1)"><i class="ti ti-chevron-left"></i></button>
+    <span class="nav-label" id="nav-label"></span>
+    <button class="btn" onclick="shiftPeriod(1)"><i class="ti ti-chevron-right"></i></button>
+    <div class="view-tabs">
+      <button class="btn" id="tab-day" onclick="setView('day')">日</button>
+      <button class="btn" id="tab-week" onclick="setView('week')">週</button>
+      <button class="btn" id="tab-month" onclick="setView('month')">月</button>
+    </div>
+  </div>
+  <div id="view-area"><div style="text-align:center;padding:3rem;color:#888;font-size:14px">読み込み中...</div></div>
+</div>
+
+<button class="fab" onclick="openAdd(null,null)" aria-label="予定を追加"><i class="ti ti-plus"></i></button>
+
+<nav class="bottom-nav">
+  <div class="bottom-nav-inner">
+    <button class="bnav-btn" id="bnav-day" onclick="setView('day')"><i class="ti ti-calendar-event"></i>日</button>
+    <button class="bnav-btn" id="bnav-week" onclick="setView('week')"><i class="ti ti-calendar-week"></i>週</button>
+    <button class="bnav-btn" id="bnav-month" onclick="setView('month')"><i class="ti ti-calendar-month"></i>月</button>
+  </div>
+</nav>
+
+<div id="modal-bg" class="modal-bg" style="display:none" onclick="closeBg(event)">
+  <div class="modal" id="modal-box"></div>
+</div>
+
+<script>
+const GAS_URL='https://script.google.com/macros/s/AKfycbwBfM71IBbrSjAMMO9doWohr4ZKCruekYVBHYBGSRVUidNkB97DQ08vXeBtQxJxQsLD/exec';
+const ECOLORS=[
+  {bg:'#E6F1FB',tc:'#0C447C',dot:'#185FA5',label:'青'},
+  {bg:'#E1F5EE',tc:'#085041',dot:'#0F6E56',label:'緑'},
+  {bg:'#FAEEDA',tc:'#633806',dot:'#BA7517',label:'橙'},
+  {bg:'#FBEAF0',tc:'#72243E',dot:'#D4537E',label:'ピンク'},
+  {bg:'#EEEDFE',tc:'#26215C',dot:'#534AB7',label:'紫'},
+];
+const CAVS=['#185FA5','#0F6E56','#BA7517','#D4537E','#534AB7','#993C1D','#A32D2D','#3B6D11'];
+const DOWS=['日','月','火','水','木','金','土'];
+let S={view:'week',offset:0,deptIdx:0,stores:[{name:'A店舗',depts:['〇事業部','△事業部','□事業部']},{name:'B店舗',depts:['〇事業部','△事業部']},{name:'C店舗',depts:['〇事業部']}],chiefs:{},staff:{},csched:{},ssched:{}};
+
+function setStatus(msg,type=''){const el=document.getElementById('status-bar');el.textContent=msg;el.className='status-bar'+(type?' '+type:'')}
+async function loadData(){
+  try{setStatus('読み込み中...','saving');const res=await fetch(`${GAS_URL}?action=getAll`);const data=await res.json();
+  if(data&&data.stores){S.stores=data.stores||S.stores;S.chiefs=data.chiefs||{};S.staff=data.staff||{};S.csched=data.csched||{};S.ssched=data.ssched||{};}
+  setStatus('最終読込: '+new Date().toLocaleTimeString('ja-JP'),'saved');}catch(e){setStatus('オフラインで使用中','error');}render();
+}
+async function saveData(){
+  try{setStatus('保存中...','saving');const payload={stores:S.stores,chiefs:S.chiefs,staff:S.staff,csched:S.csched,ssched:S.ssched};
+  await fetch(GAS_URL,{method:'POST',body:new URLSearchParams({action:'saveAll',data:JSON.stringify(payload)})});
+  setStatus('保存完了: '+new Date().toLocaleTimeString('ja-JP'),'saved');}catch(e){setStatus('保存失敗','error');}
+}
+function hourOpts(s){let h='<option value="">−</option>';for(let i=6;i<=23;i++){const v=String(i).padStart(2,'0');h+=`<option value="${v}"${v===s?' selected':''}>${v}</option>`}return h}
+function minOpts(s){let h='<option value="">−</option>';['00','15','30','45'].forEach(m=>h+=`<option value="${m}"${m===s?' selected':''}>${m}</option>`);return h}
+function timePickerHTML(prefix,val){const p=val?val.split(':'):['',''];return`<div class="time-row"><select id="${prefix}-h">${hourOpts(p[0]||'')}</select><span class="time-sep">:</span><select id="${prefix}-m">${minOpts(p[1]||'')}</select></div>`}
+function getTime(prefix){const h=document.getElementById(`${prefix}-h`)?.value,m=document.getElementById(`${prefix}-m`)?.value;return(h&&m)?`${h}:${m}`:''}
+function dkey(di){return`d${di}`}
+function getDepts(){const r=[];S.stores.forEach((s,si)=>s.depts.forEach((d,di)=>r.push({label:`${s.name} ${d}`,si,di})));return r}
+function getChiefs(di){if(!S.chiefs[dkey(di)])S.chiefs[dkey(di)]=di===0?[{name:'島村'},{name:'森園'},{name:'河合'}]:[];return S.chiefs[dkey(di)]}
+function getStaff(di){if(!S.staff[dkey(di)])S.staff[dkey(di)]=[];return S.staff[dkey(di)]}
+function getCsched(di){if(!S.csched[dkey(di)])S.csched[dkey(di)]={};return S.csched[dkey(di)]}
+function getSsched(di){if(!S.ssched[dkey(di)])S.ssched[dkey(di)]={};return S.ssched[dkey(di)]}
+function today(){return new Date()}
+function mondayOf(d){const r=new Date(d);const dw=r.getDay();r.setDate(r.getDate()+(dw===0?-6:1-dw));return r}
+function dateKey(d){return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
+function fmtS(d){return`${d.getMonth()+1}/${d.getDate()}`}
+function fmtDow(d){return DOWS[d.getDay()]}
+function isToday(d){return dateKey(d)===dateKey(today())}
+function isWeekend(d){return d.getDay()===0||d.getDay()===6}
+function getBase(){const t=today();if(S.view==='day'){const d=new Date(t);d.setDate(d.getDate()+S.offset);return d}if(S.view==='week'){const m=mondayOf(t);m.setDate(m.getDate()+S.offset*7);return m}return new Date(t.getFullYear(),t.getMonth()+S.offset,1)}
+function sortE(e){return[...e].sort((a,b)=>(a.start||'99:99').localeCompare(b.start||'99:99'))}
+function render(){
+  const depts=getDepts();if(S.deptIdx>=depts.length)S.deptIdx=0;
+  document.getElementById('dept-sel').innerHTML=depts.map((d,i)=>`<option value="${i}"${i===S.deptIdx?' selected':''}>${d.label}</option>`).join('');
+  document.getElementById('page-title').textContent=depts[S.deptIdx]?.label||'スケジュール';
+  ['day','week','month'].forEach(v=>{
+    document.getElementById(`tab-${v}`).className='btn'+(S.view===v?' active':'');
+    const b=document.getElementById(`bnav-${v}`);if(b)b.className='bnav-btn'+(S.view===v?' active':'');
+  });
+  const base=getBase();
+  if(S.view==='week'){const end=new Date(base);end.setDate(end.getDate()+6);document.getElementById('nav-label').textContent=`${fmtS(base)}〜${fmtS(end)}`;renderWeek(base);}
+  else if(S.view==='month'){document.getElementById('nav-label').textContent=`${base.getFullYear()}年${base.getMonth()+1}月`;renderMonth(base);}
+  else{document.getElementById('nav-label').textContent=`${fmtS(base)}（${fmtDow(base)}）`;renderDay(base);}
+}
+function makeChiefCells(dk,di,wk,chiefs,csched){
+  let h='';
+  chiefs.forEach((_,mi)=>{
+    const entries=sortE(csched[`${dk}__${mi}`]||[]);
+    h+=`<td class="td-chief${wk?' weekend':''}">`;
+    entries.forEach((e,ei)=>{const c=ECOLORS[e.color||0],time=e.start?(e.end?`${e.start}〜${e.end}`:`${e.start}〜`):'';
+      h+=`<div class="entry" style="background:${c.bg};color:${c.tc}" onclick="openEdit('${dk}',${mi},${ei})">`;
+      if(time)h+=`<span style="font-size:10px;opacity:.75">${time}</span><br>`;
+      h+=`${e.name}</div>`;});
+    h+=`<button class="add-cell" onclick="openAdd('${dk}',${mi})"><i class="ti ti-plus"></i></button></td>`;
+  });return h;
+}
+function makeStaffCells(dk,di,wk,staff,ssched){
+  let h='';
+  staff.forEach((_,si)=>{const v=ssched[`${dk}__${si}`]||'';
+    h+=`<td class="td-staff${wk?' weekend':''}" onclick="toggleStaff('${dk}',${si})">`;
+    if(v==='出勤')h+=`<span class="staff-badge badge-on">出</span>`;
+    else if(v==='休日')h+=`<span class="staff-badge badge-off">休</span>`;
+    else h+=`<span style="color:#ccc;font-size:10px">−</span>`;
+    h+='</td>';});return h;
+}
+function renderTableHead(chiefs,staff){
+  let h='<thead><tr><th class="th-date"></th>';
+  if(chiefs.length)h+=`<th class="th-section" colspan="${chiefs.length}" style="background:#e6f1fb;color:#0c447c">チーフ</th>`;
+  if(staff.length)h+=`<th class="th-section" colspan="${staff.length}" style="background:#f1efe8;color:#5f5e5a">スタッフ</th>`;
+  h+='</tr><tr><th class="th-date">日付</th>';
+  chiefs.forEach((m,mi)=>h+=`<th class="th-chief"><div class="avatar" style="background:${CAVS[mi%8]}">${m.name[0]}</div>${m.name}</th>`);
+  staff.forEach(s=>h+=`<th class="th-staff" title="${s.name}">${s.name.slice(0,2)}</th>`);
+  return h+'</tr></thead>';
+}
+function renderWeek(mon){
+  const di=S.deptIdx,chiefs=getChiefs(di),staff=getStaff(di),csched=getCsched(di),ssched=getSsched(di);
+  const dates=Array.from({length:7},(_,i)=>{const d=new Date(mon);d.setDate(d.getDate()+i);return d});
+  let h=`<div class="table-wrap"><table>${renderTableHead(chiefs,staff)}<tbody>`;
+  dates.forEach(d=>{const dk=dateKey(d),wk=isWeekend(d),tod=isToday(d);
+    h+=`<tr><td class="td-date${wk?' weekend':''}${tod?' today-c':''}">${fmtS(d)}<br><span style="font-size:10px">${fmtDow(d)}</span></td>`;
+    h+=makeChiefCells(dk,di,wk,chiefs,csched)+makeStaffCells(dk,di,wk,staff,ssched)+'</tr>';});
+  document.getElementById('view-area').innerHTML=h+'</tbody></table></div>';
+}
+function renderMonth(first){
+  const di=S.deptIdx,year=first.getFullYear(),month=first.getMonth();
+  const lastDay=new Date(year,month+1,0).getDate();
+  const chiefs=getChiefs(di),staff=getStaff(di),csched=getCsched(di),ssched=getSsched(di);
+  let h=`<div class="table-wrap"><table>${renderTableHead(chiefs,staff)}<tbody>`;
+  for(let day=1;day<=lastDay;day++){
+    const d=new Date(year,month,day),dk=dateKey(d),wk=isWeekend(d),tod=isToday(d);
+    h+=`<tr><td class="td-date${wk?' weekend':''}${tod?' today-c':''}">${day}<br><span style="font-size:10px">${fmtDow(d)}</span></td>`;
+    h+=makeChiefCells(dk,di,wk,chiefs,csched)+makeStaffCells(dk,di,wk,staff,ssched)+'</tr>';}
+  document.getElementById('view-area').innerHTML=h+'</tbody></table></div>';
+}
+function renderDay(d){
+  const di=S.deptIdx,chiefs=getChiefs(di),staff=getStaff(di),csched=getCsched(di),ssched=getSsched(di),dk=dateKey(d);
+  let h='';
+  if(chiefs.length){
+    h+='<div class="day-section-label">チーフ</div>';
+    chiefs.forEach((m,mi)=>{const entries=sortE(csched[`${dk}__${mi}`]||[]);
+      h+=`<div class="day-chief-row"><div class="day-chief-head"><div class="avatar" style="display:inline-flex;width:28px;height:28px;background:${CAVS[mi%8]};font-size:12px">${m.name[0]}</div><span style="flex:1;font-size:15px">${m.name}</span><button class="btn primary" style="padding:8px 12px;font-size:13px;min-height:40px" onclick="openAdd('${dk}',${mi})"><i class="ti ti-plus"></i> 追加</button></div><div class="day-entries-wrap">`;
+      if(!entries.length)h+=`<span style="font-size:13px;color:#bbb">予定なし</span>`;
+      else entries.forEach((e,ei)=>{const c=ECOLORS[e.color||0],time=e.start?(e.end?`${e.start}〜${e.end}`:`${e.start}〜`):'';
+        h+=`<div class="day-entry-card" style="background:${c.bg};color:${c.tc}" onclick="openEdit('${dk}',${mi},${ei})">`;
+        if(time)h+=`<div style="font-size:11px;opacity:.75;margin-bottom:2px">${time}</div>`;
+        h+=`<div style="font-weight:600;font-size:13px">${e.name}</div>`;
+        if(e.note)h+=`<div style="font-size:11px;margin-top:4px;opacity:.8">${e.note}</div>`;
+        h+='</div>';});
+      h+='</div></div>';});
+  }
+  if(staff.length){
+    h+='<div class="day-section-label">スタッフ出勤</div><div class="staff-day-card">';
+    staff.forEach((s,si)=>{const v=ssched[`${dk}__${si}`]||'';
+      h+=`<div class="staff-day-row" onclick="toggleStaff('${dk}',${si})"><span style="flex:1;font-size:15px">${s.name}</span>${v==='出勤'?`<span class="staff-badge badge-on" style="padding:5px 12px;font-size:13px">出勤</span>`:v==='休日'?`<span class="staff-badge badge-off" style="padding:5px 12px;font-size:13px">休日</span>`:`<span style="font-size:13px;color:#bbb">未設定</span>`}<i class="ti ti-chevron-right" style="color:#ccc;font-size:16px"></i></div>`;});
+    h+='</div>';
+  }
+  if(!chiefs.length&&!staff.length)h='<div style="text-align:center;padding:3rem;color:#bbb;font-size:14px">管理画面からチーフ・スタッフを追加してください</div>';
+  document.getElementById('view-area').innerHTML=h;
+}
+function toggleStaff(dk,si){const ss=getSsched(S.deptIdx),key=`${dk}__${si}`,cur=ss[key]||'';ss[key]=cur===''?'出勤':cur==='出勤'?'休日':'';render()}
+let editCtx=null;
+function colorSwatchHTML(sel){return ECOLORS.map((c,i)=>`<div class="color-swatch${i===sel?' selected':''}" style="background:${c.dot}" onclick="selColor(${i})" title="${c.label}"></div>`).join('')}
+function mHTML(title,body){return`<div class="modal-handle"></div><h3>${title}</h3>${body}`}
+function openAdd(dk,mi){
+  editCtx=null;const di=S.deptIdx,chiefs=getChiefs(di),base=getBase();
+  let dateOpts='';
+  if(!dk){const days=S.view==='week'?7:S.view==='month'?new Date(base.getFullYear(),base.getMonth()+1,0).getDate():1;
+    for(let i=0;i<days;i++){const d=new Date(base);d.setDate(d.getDate()+i);dateOpts+=`<option value="${dateKey(d)}">${fmtS(d)}（${fmtDow(d)}）</option>`}}
+  document.getElementById('modal-box').innerHTML=mHTML('予定を追加',`
+    ${!dk?`<div class="field"><label>日付</label><select id="f-date">${dateOpts}</select></div>`:`<input type="hidden" id="f-date" value="${dk}">`}
+    <div class="field"><label>チーフ</label><select id="f-member">${chiefs.map((m,i)=>`<option value="${i}"${i===(mi!=null?mi:0)?' selected':''}>${m.name}</option>`).join('')}</select></div>
+    <div class="field"><label>現場名</label><input type="text" id="f-name" placeholder="例：A現場、〇〇工事" autocomplete="off" /></div>
+    <div class="row2"><div class="field"><label>開始</label>${timePickerHTML('f-start','')}</div><div class="field"><label>終了</label>${timePickerHTML('f-end','')}</div></div>
+    <div class="field"><label>備考</label><textarea id="f-note" placeholder="メモや詳細など"></textarea></div>
+    <div class="field"><label>色</label><div class="color-row">${colorSwatchHTML(0)}</div></div>
+    <input type="hidden" id="f-color" value="0" />
+    <div class="modal-btns"><button class="btn" onclick="closeModal()">キャンセル</button><button class="btn primary" onclick="saveEntry()">追加</button></div>`);
+  showModal();setTimeout(()=>document.getElementById('f-name').focus(),100);
+}
+function openEdit(dk,mi,ei){
+  const sched=getCsched(S.deptIdx),entries=sched[`${dk}__${mi}`]||[],sorted=sortE(entries),e=sorted[ei];
+  if(!e)return;const origIdx=entries.indexOf(e);editCtx={dk,mi,origIdx};
+  document.getElementById('modal-box').innerHTML=mHTML('予定を編集',`
+    <div class="field"><label>現場名</label><input type="text" id="f-name" value="${e.name}" autocomplete="off" /></div>
+    <div class="row2"><div class="field"><label>開始</label>${timePickerHTML('f-start',e.start||'')}</div><div class="field"><label>終了</label>${timePickerHTML('f-end',e.end||'')}</div></div>
+    <div class="field"><label>備考</label><textarea id="f-note">${e.note||''}</textarea></div>
+    <div class="field"><label>色</label><div class="color-row">${colorSwatchHTML(e.color||0)}</div></div>
+    <input type="hidden" id="f-color" value="${e.color||0}" />
+    <div class="modal-btns"><button class="btn danger" onclick="deleteEntry()">削除</button><button class="btn" onclick="closeModal()">キャンセル</button><button class="btn primary" onclick="updateEntry()">保存</button></div>`);
+  showModal();setTimeout(()=>document.getElementById('f-name').focus(),100);
+}
+function selColor(i){document.getElementById('f-color').value=i;document.querySelectorAll('.color-swatch').forEach((el,idx)=>el.classList.toggle('selected',idx===i))}
+function saveEntry(){
+  const di=S.deptIdx,dk=document.getElementById('f-date').value,mi=parseInt(document.getElementById('f-member')?.value||0);
+  const name=document.getElementById('f-name').value.trim();if(!name)return;
+  const start=getTime('f-start'),end=getTime('f-end'),note=document.getElementById('f-note').value.trim(),color=parseInt(document.getElementById('f-color').value||0);
+  const sched=getCsched(di),key=`${dk}__${mi}`;if(!sched[key])sched[key]=[];sched[key].push({name,start,end,note,color});closeModal();render();
+}
+function updateEntry(){
+  if(!editCtx)return;const{dk,mi,origIdx}=editCtx;const name=document.getElementById('f-name').value.trim();if(!name)return;
+  const start=getTime('f-start'),end=getTime('f-end'),note=document.getElementById('f-note').value.trim(),color=parseInt(document.getElementById('f-color').value||0);
+  getCsched(S.deptIdx)[`${dk}__${mi}`][origIdx]={name,start,end,note,color};closeModal();render();
+}
+function deleteEntry(){
+  if(!editCtx)return;const{dk,mi,origIdx}=editCtx,sched=getCsched(S.deptIdx),key=`${dk}__${mi}`;
+  sched[key].splice(origIdx,1);if(!sched[key].length)delete sched[key];closeModal();render();
+}
+function openSettings(){
+  document.getElementById('modal-box').innerHTML=mHTML('管理',`<div id="set-tabs" style="display:flex;gap:6px;margin-bottom:1rem"><button class="btn active" id="st-store" onclick="setTab('store')">店舗・部署</button><button class="btn" id="st-chief" onclick="setTab('chief')">チーフ</button><button class="btn" id="st-staff" onclick="setTab('staff')">スタッフ</button></div><div id="set-body"></div>`);
+  showModal();setTab('store');
+}
+function setTab(t){
+  ['store','chief','staff'].forEach(x=>document.getElementById(`st-${x}`).className='btn'+(x===t?' active':''));
+  if(t==='store')renderStoreTab();else if(t==='chief')renderChiefTab();else renderStaffTab();
+}
+function renderStoreTab(){
+  let h='';
+  S.stores.forEach((s,si)=>{
+    h+=`<div class="store-block"><div class="inline-row"><input type="text" value="${s.name}" style="flex:1" onchange="S.stores[${si}].name=this.value;render()" /><button class="btn danger" style="padding:8px;min-height:44px" onclick="delStore(${si})"><i class="ti ti-trash"></i></button></div>`;
+    s.depts.forEach((d,di)=>h+=`<div class="inline-row" style="padding-left:8px"><input type="text" value="${d}" style="flex:1;font-size:14px" onchange="S.stores[${si}].depts[${di}]=this.value;render()" /><button class="btn danger" style="padding:8px;min-height:44px" onclick="delDept(${si},${di})"><i class="ti ti-x"></i></button></div>`);
+    h+=`<button class="btn" style="font-size:13px;padding:8px 12px;margin-left:8px;margin-top:4px;min-height:44px" onclick="addDept(${si})"><i class="ti ti-plus"></i> 部署追加</button></div>`;
+  });
+  h+=`<button class="btn primary" style="width:100%;justify-content:center;margin-top:8px;min-height:48px;font-size:14px" onclick="addStore()"><i class="ti ti-plus"></i> 店舗追加</button>`;
+  h+=`<div class="modal-btns"><button class="btn primary" onclick="closeModal()">完了</button></div>`;
+  document.getElementById('set-body').innerHTML=h;
+}
+function renderChiefTab(){
+  const di=S.deptIdx,depts=getDepts(),chiefs=getChiefs(di);
+  let h=`<div class="field"><label>対象部署</label><select onchange="S.deptIdx=parseInt(this.value);setTab('chief')">${depts.map((d,i)=>`<option value="${i}"${i===di?' selected':''}>${d.label}</option>`).join('')}</select></div>`;
+  h+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">'+chiefs.map((m,i)=>`<div class="chip"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${CAVS[i%8]}"></span>${m.name}<button onclick="delChief(${i})"><i class="ti ti-x"></i></button></div>`).join('')+'</div>';
+  h+=`<div class="inline-row"><input type="text" id="new-chief" placeholder="チーフ名" style="flex:1" /><button class="btn primary" style="min-height:48px;padding:8px 16px;font-size:14px" onclick="addChief()"><i class="ti ti-plus"></i> 追加</button></div>`;
+  h+=`<div class="modal-btns"><button class="btn primary" onclick="closeModal()">完了</button></div>`;
+  document.getElementById('set-body').innerHTML=h;setTimeout(()=>document.getElementById('new-chief')?.focus(),100);
+}
+function renderStaffTab(){
+  const di=S.deptIdx,depts=getDepts(),staff=getStaff(di);
+  let h=`<div class="field"><label>対象部署</label><select onchange="S.deptIdx=parseInt(this.value);setTab('staff')">${depts.map((d,i)=>`<option value="${i}"${i===di?' selected':''}>${d.label}</option>`).join('')}</select></div>`;
+  h+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">'+staff.map((s,i)=>`<div class="chip">${s.name}<button onclick="delStaff(${i})"><i class="ti ti-x"></i></button></div>`).join('')+'</div>';
+  h+=`<div class="inline-row"><input type="text" id="new-staff" placeholder="スタッフ名" style="flex:1" /><button class="btn primary" style="min-height:48px;padding:8px 16px;font-size:14px" onclick="addStaff()"><i class="ti ti-plus"></i> 追加</button></div>`;
+  h+=`<div class="modal-btns"><button class="btn primary" onclick="closeModal()">完了</button></div>`;
+  document.getElementById('set-body').innerHTML=h;setTimeout(()=>document.getElementById('new-staff')?.focus(),100);
+}
+function addStore(){S.stores.push({name:'新しい店舗',depts:['〇事業部']});renderStoreTab()}
+function delStore(si){if(!confirm('削除しますか？'))return;S.stores.splice(si,1);render();renderStoreTab()}
+function addDept(si){S.stores[si].depts.push('新しい部署');render();renderStoreTab()}
+function delDept(si,di){if(!confirm('削除しますか？'))return;S.stores[si].depts.splice(di,1);render();renderStoreTab()}
+function addChief(){const n=document.getElementById('new-chief')?.value.trim();if(!n)return;getChiefs(S.deptIdx).push({name:n});render();renderChiefTab()}
+function delChief(i){if(!confirm('削除しますか？'))return;getChiefs(S.deptIdx).splice(i,1);render();renderChiefTab()}
+function addStaff(){const n=document.getElementById('new-staff')?.value.trim();if(!n)return;getStaff(S.deptIdx).push({name:n});render();renderStaffTab()}
+function delStaff(i){if(!confirm('削除しますか？'))return;getStaff(S.deptIdx).splice(i,1);render();renderStaffTab()}
+function setView(v){S.view=v;S.offset=0;render()}
+function shiftPeriod(n){S.offset+=n;render()}
+function changeDept(){S.deptIdx=parseInt(document.getElementById('dept-sel').value);render()}
+function showModal(){document.getElementById('modal-bg').style.display='flex'}
+function closeModal(){document.getElementById('modal-bg').style.display='none';render()}
+function closeBg(e){if(e.target.id==='modal-bg')closeModal()}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
+loadData();
+</script>
+</body>
+</html>
