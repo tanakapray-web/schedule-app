@@ -52,6 +52,7 @@ th,td{border:0.5px solid #e0ded8}
 .td-staff:active{background:#e0ded8}
 .entry{border-radius:4px;padding:4px 6px;font-size:11px;margin-bottom:3px;cursor:pointer;text-align:left;line-height:1.4;word-break:break-all;min-height:32px}
 .entry:active{opacity:.7}
+.entry.repeating{border-left:3px solid #ba7517}
 .add-cell{display:block;width:100%;padding:6px;font-size:14px;color:#ccc;background:none;border:none;cursor:pointer;text-align:center;border-radius:4px;min-height:36px;touch-action:manipulation}
 .add-cell:active{background:#f0efec}
 .staff-badge{display:inline-block;border-radius:3px;padding:2px 5px;font-size:10px;font-weight:500;white-space:nowrap}
@@ -67,7 +68,7 @@ th,td{border:0.5px solid #e0ded8}
 .time-row{display:flex;align-items:center;gap:6px}
 .time-row select{flex:1}
 .time-sep{font-size:16px;color:#888;flex-shrink:0;font-weight:500}
-.modal-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+.modal-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap}
 .modal-btns .btn{min-height:44px;padding:10px 16px;font-size:14px}
 .color-row{display:flex;gap:10px;margin-top:6px;flex-wrap:wrap}
 .color-swatch{width:32px;height:32px;border-radius:50%;cursor:pointer;border:3px solid transparent;touch-action:manipulation}
@@ -82,8 +83,10 @@ th,td{border:0.5px solid #e0ded8}
 .day-chief-row{border:0.5px solid #e0ded8;border-radius:12px;margin-bottom:10px;overflow:hidden}
 .day-chief-head{padding:10px 14px;background:#f8f7f4;font-size:14px;font-weight:500;display:flex;align-items:center;gap:8px}
 .day-entries-wrap{display:flex;flex-wrap:wrap;gap:8px;padding:10px 14px}
-.day-entry-card{border-radius:8px;padding:8px 12px;font-size:13px;cursor:pointer;min-width:100px;max-width:180px;line-height:1.5;touch-action:manipulation}
+.day-entry-card{border-radius:8px;padding:8px 12px;font-size:13px;cursor:pointer;min-width:100px;max-width:180px;line-height:1.5;touch-action:manipulation;position:relative}
 .day-entry-card:active{opacity:.7}
+.day-entry-card.repeating{border-left:3px solid #ba7517}
+.repeat-badge{display:inline-block;font-size:10px;background:#faeeda;color:#633806;border-radius:3px;padding:1px 5px;margin-top:3px}
 .staff-day-card{border:0.5px solid #e0ded8;border-radius:12px;overflow:hidden;margin-bottom:10px}
 .staff-day-row{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:0.5px solid #e0ded8;font-size:14px;cursor:pointer;min-height:52px;touch-action:manipulation}
 .staff-day-row:last-child{border-bottom:none}
@@ -94,13 +97,14 @@ th,td{border:0.5px solid #e0ded8}
 .status-bar.error{color:#a32d2d}
 .fab{display:none;position:fixed;right:16px;bottom:80px;width:56px;height:56px;border-radius:50%;background:#185fa5;color:#fff;border:none;font-size:28px;cursor:pointer;z-index:99;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(24,95,165,.4);touch-action:manipulation}
 .fab:active{opacity:.8;transform:scale(.95)}
+.repeat-section{background:#f8f7f4;border-radius:8px;padding:12px;margin-top:4px}
+.repeat-section select{margin-top:6px}
 @media(max-width:600px){
   body{padding-bottom:80px}
   .bottom-nav{display:block}
   .fab{display:flex}
   .view-tabs{display:none}
   .topbar h2{font-size:14px}
-  .topbar .btn-label{display:none}
 }
 @media(min-width:600px){
   .modal-bg{align-items:center}
@@ -115,7 +119,7 @@ th,td{border:0.5px solid #e0ded8}
     <select id="dept-sel" onchange="changeDept()" style="width:auto;max-width:160px;font-size:13px;padding:7px 28px 7px 10px"></select>
     <button class="btn" onclick="openSettings()"><i class="ti ti-settings"></i> <span class="btn-label">管理</span></button>
     <button class="btn save-btn" onclick="saveData()"><i class="ti ti-cloud-upload"></i> <span class="btn-label">保存</span></button>
-    <button class="btn" onclick="exportExcel()"><i class="ti ti-download"></i> <span class="btn-label">出力</span></button>
+    <button class="btn" onclick="exportCSV()"><i class="ti ti-download"></i> <span class="btn-label">出力</span></button>
   </div>
   <div class="status-bar" id="status-bar">読み込み中...</div>
   <div class="nav">
@@ -156,6 +160,18 @@ const ECOLORS=[
 ];
 const CAVS=['#185FA5','#0F6E56','#BA7517','#D4537E','#534AB7','#993C1D','#A32D2D','#3B6D11'];
 const DOWS=['日','月','火','水','木','金','土'];
+const REPEAT_OPTS=[
+  {val:'none',label:'繰り返しなし'},
+  {val:'weekly',label:'毎週'},
+  {val:'biweekly',label:'隔週'},
+  {val:'monthly',label:'毎月'},
+  {val:'every2m',label:'2ヶ月ごと'},
+  {val:'every3m',label:'3ヶ月ごと'},
+  {val:'every4m',label:'4ヶ月ごと'},
+  {val:'every5m',label:'5ヶ月ごと'},
+  {val:'every6m',label:'6ヶ月ごと'},
+];
+
 let S={view:'week',offset:0,deptIdx:0,stores:[{name:'A店舗',depts:['〇事業部','△事業部','□事業部']},{name:'B店舗',depts:['〇事業部','△事業部']},{name:'C店舗',depts:['〇事業部']}],chiefs:{},staff:{},csched:{},ssched:{}};
 
 function setStatus(msg,type=''){const el=document.getElementById('status-bar');el.textContent=msg;el.className='status-bar'+(type?' '+type:'')}
@@ -169,25 +185,57 @@ async function saveData(){
   await fetch(GAS_URL,{method:'POST',body:new URLSearchParams({action:'saveAll',data:JSON.stringify(payload)})});
   setStatus('保存完了: '+new Date().toLocaleTimeString('ja-JP'),'saved');}catch(e){setStatus('保存失敗','error');}
 }
+
 function hourOpts(s){let h='<option value="">−</option>';for(let i=6;i<=23;i++){const v=String(i).padStart(2,'0');h+=`<option value="${v}"${v===s?' selected':''}>${v}</option>`}return h}
 function minOpts(s){let h='<option value="">−</option>';['00','15','30','45'].forEach(m=>h+=`<option value="${m}"${m===s?' selected':''}>${m}</option>`);return h}
 function timePickerHTML(prefix,val){const p=val?val.split(':'):['',''];return`<div class="time-row"><select id="${prefix}-h">${hourOpts(p[0]||'')}</select><span class="time-sep">:</span><select id="${prefix}-m">${minOpts(p[1]||'')}</select></div>`}
 function getTime(prefix){const h=document.getElementById(`${prefix}-h`)?.value,m=document.getElementById(`${prefix}-m`)?.value;return(h&&m)?`${h}:${m}`:''}
+
+function repeatOptsHTML(sel){return REPEAT_OPTS.map(o=>`<option value="${o.val}"${o.val===sel?' selected':''}>${o.label}</option>`).join('')}
+
 function dkey(di){return`d${di}`}
 function getDepts(){const r=[];S.stores.forEach((s,si)=>s.depts.forEach((d,di)=>r.push({label:`${s.name} ${d}`,si,di})));return r}
 function getChiefs(di){if(!S.chiefs[dkey(di)])S.chiefs[dkey(di)]=di===0?[{name:'島村'},{name:'森園'},{name:'河合'}]:[];return S.chiefs[dkey(di)]}
 function getStaff(di){if(!S.staff[dkey(di)])S.staff[dkey(di)]=[];return S.staff[dkey(di)]}
 function getCsched(di){if(!S.csched[dkey(di)])S.csched[dkey(di)]={};return S.csched[dkey(di)]}
 function getSsched(di){if(!S.ssched[dkey(di)])S.ssched[dkey(di)]={};return S.ssched[dkey(di)]}
+
 function today(){return new Date()}
 function mondayOf(d){const r=new Date(d);const dw=r.getDay();r.setDate(r.getDate()+(dw===0?-6:1-dw));return r}
 function dateKey(d){return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
+function parseDateKey(dk){const[y,m,d]=dk.split('-').map(Number);return new Date(y,m-1,d)}
 function fmtS(d){return`${d.getMonth()+1}/${d.getDate()}`}
 function fmtDow(d){return DOWS[d.getDay()]}
 function isToday(d){return dateKey(d)===dateKey(today())}
 function isWeekend(d){return d.getDay()===0||d.getDay()===6}
 function getBase(){const t=today();if(S.view==='day'){const d=new Date(t);d.setDate(d.getDate()+S.offset);return d}if(S.view==='week'){const m=mondayOf(t);m.setDate(m.getDate()+S.offset*7);return m}return new Date(t.getFullYear(),t.getMonth()+S.offset,1)}
 function sortE(e){return[...e].sort((a,b)=>(a.start||'99:99').localeCompare(b.start||'99:99'))}
+
+// 繰り返し日付を生成
+function getRepeatDates(startDk, repeat){
+  const dates=[];
+  const start=parseDateKey(startDk);
+  const end=new Date(start);
+  end.setFullYear(end.getFullYear()+1);
+  let cur=new Date(start);
+  cur.setDate(cur.getDate()+(repeat==='biweekly'?7:repeat==='weekly'?7:0));
+  if(repeat==='weekly'||repeat==='biweekly'){
+    const step=repeat==='biweekly'?14:7;
+    while(cur<=end){dates.push(dateKey(cur));cur.setDate(cur.getDate()+step);}
+  }else if(repeat==='monthly'||repeat.startsWith('every')){
+    let months=1;
+    if(repeat==='every2m')months=2;
+    else if(repeat==='every3m')months=3;
+    else if(repeat==='every4m')months=4;
+    else if(repeat==='every5m')months=5;
+    else if(repeat==='every6m')months=6;
+    cur=new Date(start);
+    cur.setMonth(cur.getMonth()+months);
+    while(cur<=end){dates.push(dateKey(cur));cur.setMonth(cur.getMonth()+months);}
+  }
+  return dates;
+}
+
 function render(){
   const depts=getDepts();if(S.deptIdx>=depts.length)S.deptIdx=0;
   document.getElementById('dept-sel').innerHTML=depts.map((d,i)=>`<option value="${i}"${i===S.deptIdx?' selected':''}>${d.label}</option>`).join('');
@@ -201,18 +249,25 @@ function render(){
   else if(S.view==='month'){document.getElementById('nav-label').textContent=`${base.getFullYear()}年${base.getMonth()+1}月`;renderMonth(base);}
   else{document.getElementById('nav-label').textContent=`${fmtS(base)}（${fmtDow(base)}）`;renderDay(base);}
 }
+
 function makeChiefCells(dk,di,wk,chiefs,csched){
   let h='';
   chiefs.forEach((_,mi)=>{
     const entries=sortE(csched[`${dk}__${mi}`]||[]);
     h+=`<td class="td-chief${wk?' weekend':''}">`;
-    entries.forEach((e,ei)=>{const c=ECOLORS[e.color||0],time=e.start?(e.end?`${e.start}〜${e.end}`:`${e.start}〜`):'';
-      h+=`<div class="entry" style="background:${c.bg};color:${c.tc}" onclick="openEdit('${dk}',${mi},${ei})">`;
+    entries.forEach((e,ei)=>{
+      const c=ECOLORS[e.color||0],time=e.start?(e.end?`${e.start}〜${e.end}`:`${e.start}〜`):'';
+      const isRep=e.repeatId?'repeating':'';
+      h+=`<div class="entry ${isRep}" style="background:${c.bg};color:${c.tc}" onclick="openEdit('${dk}',${mi},${ei})">`;
       if(time)h+=`<span style="font-size:10px;opacity:.75">${time}</span><br>`;
-      h+=`${e.name}</div>`;});
+      h+=`${e.name}`;
+      if(e.repeatId)h+=`<span style="display:block;font-size:9px;opacity:.6;margin-top:1px">🔁</span>`;
+      h+='</div>';
+    });
     h+=`<button class="add-cell" onclick="openAdd('${dk}',${mi})"><i class="ti ti-plus"></i></button></td>`;
   });return h;
 }
+
 function makeStaffCells(dk,di,wk,staff,ssched){
   let h='';
   staff.forEach((_,si)=>{const v=ssched[`${dk}__${si}`]||'';
@@ -222,6 +277,7 @@ function makeStaffCells(dk,di,wk,staff,ssched){
     else h+=`<span style="color:#ccc;font-size:10px">−</span>`;
     h+='</td>';});return h;
 }
+
 function renderTableHead(chiefs,staff){
   let h='<thead><tr><th class="th-date"></th>';
   if(chiefs.length)h+=`<th class="th-section" colspan="${chiefs.length}" style="background:#e6f1fb;color:#0c447c">チーフ</th>`;
@@ -231,6 +287,7 @@ function renderTableHead(chiefs,staff){
   staff.forEach(s=>h+=`<th class="th-staff" title="${s.name}">${s.name.slice(0,2)}</th>`);
   return h+'</tr></thead>';
 }
+
 function renderWeek(mon){
   const di=S.deptIdx,chiefs=getChiefs(di),staff=getStaff(di),csched=getCsched(di),ssched=getSsched(di);
   const dates=Array.from({length:7},(_,i)=>{const d=new Date(mon);d.setDate(d.getDate()+i);return d});
@@ -240,6 +297,7 @@ function renderWeek(mon){
     h+=makeChiefCells(dk,di,wk,chiefs,csched)+makeStaffCells(dk,di,wk,staff,ssched)+'</tr>';});
   document.getElementById('view-area').innerHTML=h+'</tbody></table></div>';
 }
+
 function renderMonth(first){
   const di=S.deptIdx,year=first.getFullYear(),month=first.getMonth();
   const lastDay=new Date(year,month+1,0).getDate();
@@ -251,6 +309,7 @@ function renderMonth(first){
     h+=makeChiefCells(dk,di,wk,chiefs,csched)+makeStaffCells(dk,di,wk,staff,ssched)+'</tr>';}
   document.getElementById('view-area').innerHTML=h+'</tbody></table></div>';
 }
+
 function renderDay(d){
   const di=S.deptIdx,chiefs=getChiefs(di),staff=getStaff(di),csched=getCsched(di),ssched=getSsched(di),dk=dateKey(d);
   let h='';
@@ -259,11 +318,14 @@ function renderDay(d){
     chiefs.forEach((m,mi)=>{const entries=sortE(csched[`${dk}__${mi}`]||[]);
       h+=`<div class="day-chief-row"><div class="day-chief-head"><div class="avatar" style="display:inline-flex;width:28px;height:28px;background:${CAVS[mi%8]};font-size:12px">${m.name[0]}</div><span style="flex:1;font-size:15px">${m.name}</span><button class="btn primary" style="padding:8px 12px;font-size:13px;min-height:40px" onclick="openAdd('${dk}',${mi})"><i class="ti ti-plus"></i> 追加</button></div><div class="day-entries-wrap">`;
       if(!entries.length)h+=`<span style="font-size:13px;color:#bbb">予定なし</span>`;
-      else entries.forEach((e,ei)=>{const c=ECOLORS[e.color||0],time=e.start?(e.end?`${e.start}〜${e.end}`:`${e.start}〜`):'';
-        h+=`<div class="day-entry-card" style="background:${c.bg};color:${c.tc}" onclick="openEdit('${dk}',${mi},${ei})">`;
+      else entries.forEach((e,ei)=>{
+        const c=ECOLORS[e.color||0],time=e.start?(e.end?`${e.start}〜${e.end}`:`${e.start}〜`):'';
+        const isRep=e.repeatId?'repeating':'';
+        h+=`<div class="day-entry-card ${isRep}" style="background:${c.bg};color:${c.tc}" onclick="openEdit('${dk}',${mi},${ei})">`;
         if(time)h+=`<div style="font-size:11px;opacity:.75;margin-bottom:2px">${time}</div>`;
         h+=`<div style="font-weight:600;font-size:13px">${e.name}</div>`;
         if(e.note)h+=`<div style="font-size:11px;margin-top:4px;opacity:.8">${e.note}</div>`;
+        if(e.repeatId)h+=`<div class="repeat-badge">🔁 繰り返し</div>`;
         h+='</div>';});
       h+='</div></div>';});
   }
@@ -276,10 +338,13 @@ function renderDay(d){
   if(!chiefs.length&&!staff.length)h='<div style="text-align:center;padding:3rem;color:#bbb;font-size:14px">管理画面からチーフ・スタッフを追加してください</div>';
   document.getElementById('view-area').innerHTML=h;
 }
-function toggleStaff(dk,si){const ss=getSsched(S.deptIdx),key=`${dk}__${si}`,cur=ss[key]||'';ss[key]=cur===''?'出勤':cur==='出勤'?'休日':'';render();saveData()}
+
+function toggleStaff(dk,si){const ss=getSsched(S.deptIdx),key=`${dk}__${si}`,cur=ss[key]||'';ss[key]=cur===''?'出勤':cur==='出勤'?'休日':'';render();saveData();}
+
 let editCtx=null;
 function colorSwatchHTML(sel){return ECOLORS.map((c,i)=>`<div class="color-swatch${i===sel?' selected':''}" style="background:${c.dot}" onclick="selColor(${i})" title="${c.label}"></div>`).join('')}
 function mHTML(title,body){return`<div class="modal-handle"></div><h3>${title}</h3>${body}`}
+
 function openAdd(dk,mi){
   editCtx=null;const di=S.deptIdx,chiefs=getChiefs(di),base=getBase();
   let dateOpts='';
@@ -293,9 +358,24 @@ function openAdd(dk,mi){
     <div class="field"><label>備考</label><textarea id="f-note" placeholder="メモや詳細など"></textarea></div>
     <div class="field"><label>色</label><div class="color-row">${colorSwatchHTML(0)}</div></div>
     <input type="hidden" id="f-color" value="0" />
+    <div class="field"><label>繰り返し</label>
+      <div class="repeat-section">
+        <select id="f-repeat" onchange="toggleRepeatEnd()">${repeatOptsHTML('none')}</select>
+        <div id="repeat-end-wrap" style="display:none;margin-top:10px">
+          <label style="font-size:12px;color:#888;margin-bottom:4px;display:block">終了日（省略で1年後まで）</label>
+          <input type="text" id="f-repeat-end" placeholder="例：2027/3/31" />
+        </div>
+      </div>
+    </div>
     <div class="modal-btns"><button class="btn" onclick="closeModal()">キャンセル</button><button class="btn primary" onclick="saveEntry()">追加</button></div>`);
   showModal();setTimeout(()=>document.getElementById('f-name').focus(),100);
 }
+
+function toggleRepeatEnd(){
+  const v=document.getElementById('f-repeat').value;
+  document.getElementById('repeat-end-wrap').style.display=v==='none'?'none':'block';
+}
+
 function openEdit(dk,mi,ei){
   const sched=getCsched(S.deptIdx),entries=sched[`${dk}__${mi}`]||[],sorted=sortE(entries),e=sorted[ei];
   if(!e)return;const origIdx=entries.indexOf(e);editCtx={dk,mi,origIdx};
@@ -305,25 +385,118 @@ function openEdit(dk,mi,ei){
     <div class="field"><label>備考</label><textarea id="f-note">${e.note||''}</textarea></div>
     <div class="field"><label>色</label><div class="color-row">${colorSwatchHTML(e.color||0)}</div></div>
     <input type="hidden" id="f-color" value="${e.color||0}" />
-    <div class="modal-btns"><button class="btn danger" onclick="deleteEntry()">削除</button><button class="btn" onclick="closeModal()">キャンセル</button><button class="btn primary" onclick="updateEntry()">保存</button></div>`);
+    <div class="modal-btns">
+      <button class="btn danger" onclick="deleteEntry()">削除</button>
+      ${e.repeatId?`<button class="btn danger" onclick="deleteRepeat('${e.repeatId}',${mi})">繰り返し全削除</button>`:''}
+      <button class="btn" onclick="closeModal()">キャンセル</button>
+      <button class="btn" onclick="openCopy('${dk}',${mi},${origIdx})"><i class="ti ti-copy"></i> コピー</button>
+      <button class="btn primary" onclick="updateEntry()">保存</button>
+    </div>`);
   showModal();setTimeout(()=>document.getElementById('f-name').focus(),100);
 }
+
+function openCopy(dk,mi,origIdx){
+  const sched=getCsched(S.deptIdx),e=sched[`${dk}__${mi}`][origIdx];
+  if(!e)return;
+  const di=S.deptIdx,chiefs=getChiefs(di),base=getBase();
+  let dateOpts='';
+  const days=S.view==='week'?7:S.view==='month'?new Date(base.getFullYear(),base.getMonth()+1,0).getDate():1;
+  for(let i=0;i<days;i++){const d=new Date(base);d.setDate(d.getDate()+i);dateOpts+=`<option value="${dateKey(d)}">${fmtS(d)}（${fmtDow(d)}）</option>`}
+  document.getElementById('modal-box').innerHTML=mHTML('コピーして別日に登録',`
+    <div class="field"><label>コピー元</label><div style="font-size:14px;font-weight:500;padding:8px;background:#f8f7f4;border-radius:8px">${e.name}${e.start?' ('+e.start+(e.end?'〜'+e.end:'')+')'  :''}</div></div>
+    <div class="field"><label>コピー先の日付</label><select id="copy-date">${dateOpts}</select></div>
+    <div class="field"><label>コピー先のチーフ</label><select id="copy-member">${chiefs.map((m,i)=>`<option value="${i}"${i===mi?' selected':''}>${m.name}</option>`).join('')}</select></div>
+    <div class="modal-btns"><button class="btn" onclick="openEdit('${dk}',${mi},${origIdx})">戻る</button><button class="btn primary" onclick="doCopy(${JSON.stringify(e).replace(/"/g,'&quot;')})">登録</button></div>`);
+}
+
+function doCopy(e){
+  const dk=document.getElementById('copy-date').value;
+  const mi=parseInt(document.getElementById('copy-member').value);
+  const sched=getCsched(S.deptIdx),key=`${dk}__${mi}`;
+  if(!sched[key])sched[key]=[];
+  const newE={...e,repeatId:undefined};
+  sched[key].push(newE);
+  closeModal();render();saveData();
+}
+
 function selColor(i){document.getElementById('f-color').value=i;document.querySelectorAll('.color-swatch').forEach((el,idx)=>el.classList.toggle('selected',idx===i))}
+
 function saveEntry(){
   const di=S.deptIdx,dk=document.getElementById('f-date').value,mi=parseInt(document.getElementById('f-member')?.value||0);
   const name=document.getElementById('f-name').value.trim();if(!name)return;
   const start=getTime('f-start'),end=getTime('f-end'),note=document.getElementById('f-note').value.trim(),color=parseInt(document.getElementById('f-color').value||0);
-  const sched=getCsched(di),key=`${dk}__${mi}`;if(!sched[key])sched[key]=[];sched[key].push({name,start,end,note,color});closeModal();render();saveData();
+  const repeat=document.getElementById('f-repeat')?.value||'none';
+  const sched=getCsched(di),key=`${dk}__${mi}`;
+  if(!sched[key])sched[key]=[];
+
+  if(repeat==='none'){
+    sched[key].push({name,start,end,note,color});
+  } else {
+    const repeatId='r'+Date.now();
+    sched[key].push({name,start,end,note,color,repeatId});
+    const endInput=document.getElementById('f-repeat-end')?.value;
+    let endDate=new Date(parseDateKey(dk));
+    endDate.setFullYear(endDate.getFullYear()+1);
+    if(endInput){const parts=endInput.split('/');if(parts.length===3)endDate=new Date(parseInt(parts[0]),parseInt(parts[1])-1,parseInt(parts[2]));}
+    const repeatDates=getRepeatDates(dk,repeat);
+    repeatDates.forEach(rdk=>{
+      if(parseDateKey(rdk)>endDate)return;
+      if(!sched[`${rdk}__${mi}`])sched[`${rdk}__${mi}`]=[];
+      sched[`${rdk}__${mi}`].push({name,start,end,note,color,repeatId});
+    });
+  }
+  closeModal();render();saveData();
 }
+
 function updateEntry(){
   if(!editCtx)return;const{dk,mi,origIdx}=editCtx;const name=document.getElementById('f-name').value.trim();if(!name)return;
   const start=getTime('f-start'),end=getTime('f-end'),note=document.getElementById('f-note').value.trim(),color=parseInt(document.getElementById('f-color').value||0);
-  getCsched(S.deptIdx)[`${dk}__${mi}`][origIdx]={name,start,end,note,color};closeModal();render();saveData();
+  const e=getCsched(S.deptIdx)[`${dk}__${mi}`][origIdx];
+  getCsched(S.deptIdx)[`${dk}__${mi}`][origIdx]={...e,name,start,end,note,color};
+  closeModal();render();saveData();
 }
+
 function deleteEntry(){
   if(!editCtx)return;const{dk,mi,origIdx}=editCtx,sched=getCsched(S.deptIdx),key=`${dk}__${mi}`;
   sched[key].splice(origIdx,1);if(!sched[key].length)delete sched[key];closeModal();render();saveData();
 }
+
+function deleteRepeat(repeatId,mi){
+  if(!confirm('この繰り返し予定を全て削除しますか？'))return;
+  const sched=getCsched(S.deptIdx);
+  Object.keys(sched).forEach(key=>{
+    if(key.endsWith(`__${mi}`)){
+      sched[key]=sched[key].filter(e=>e.repeatId!==repeatId);
+      if(!sched[key].length)delete sched[key];
+    }
+  });
+  closeModal();render();saveData();
+}
+
+function exportCSV(){
+  const di=S.deptIdx,chiefs=getChiefs(di),staff=getStaff(di),csched=getCsched(di),ssched=getSsched(di);
+  const base=getBase();let dates=[];
+  if(S.view==='week'){dates=Array.from({length:7},(_,i)=>{const d=new Date(base);d.setDate(d.getDate()+i);return d});}
+  else if(S.view==='month'){const year=base.getFullYear(),month=base.getMonth();const lastDay=new Date(year,month+1,0).getDate();dates=Array.from({length:lastDay},(_,i)=>new Date(year,month,i+1));}
+  else{dates=[base];}
+  let csv='\uFEFF日付,曜日';
+  chiefs.forEach(m=>csv+=`,${m.name}（現場）,${m.name}（時間）,${m.name}（備考）`);
+  staff.forEach(s=>csv+=`,${s.name}`);csv+='\n';
+  dates.forEach(d=>{
+    const dk=dateKey(d);
+    const maxE=Math.max(1,...chiefs.map((_,mi)=>(csched[`${dk}__${mi}`]||[]).length));
+    for(let ei=0;ei<maxE;ei++){
+      csv+=ei===0?`${fmtS(d)},${fmtDow(d)}`:`${fmtS(d)},`;
+      chiefs.forEach((_,mi)=>{const entries=sortE(csched[`${dk}__${mi}`]||[]);const e=entries[ei];
+        if(e){const time=e.start?(e.end?`${e.start}〜${e.end}`:`${e.start}〜`):'';csv+=`,"${e.name}","${time}","${e.note||''}"`;
+        }else{csv+=',,,';} });
+      if(ei===0){staff.forEach((_,si)=>{const v=ssched[`${dk}__${si}`]||'';csv+=`,"${v}"`;});}
+      else{staff.forEach(()=>csv+=',');}csv+='\n';}});
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);const a=document.createElement('a');
+  a.href=url;a.download=`schedule_${fmtS(base).replace('/','')}.csv`;a.click();URL.revokeObjectURL(url);
+}
+
 function openSettings(){
   document.getElementById('modal-box').innerHTML=mHTML('管理',`<div id="set-tabs" style="display:flex;gap:6px;margin-bottom:1rem"><button class="btn active" id="st-store" onclick="setTab('store')">店舗・部署</button><button class="btn" id="st-chief" onclick="setTab('chief')">チーフ</button><button class="btn" id="st-staff" onclick="setTab('staff')">スタッフ</button></div><div id="set-body"></div>`);
   showModal();setTab('store');
@@ -375,63 +548,6 @@ function closeModal(){document.getElementById('modal-bg').style.display='none';r
 function closeBg(e){if(e.target.id==='modal-bg')closeModal()}
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
 loadData();
-</script>
-<script>
-function exportExcel(){
-  const di=S.deptIdx,chiefs=getChiefs(di),staff=getStaff(di),csched=getCsched(di),ssched=getSsched(di);
-  const base=getBase();
-  let dates=[];
-  if(S.view==='week'){
-    const mon=base;
-    dates=Array.from({length:7},(_,i)=>{const d=new Date(mon);d.setDate(d.getDate()+i);return d});
-  }else if(S.view==='month'){
-    const year=base.getFullYear(),month=base.getMonth();
-    const lastDay=new Date(year,month+1,0).getDate();
-    dates=Array.from({length:lastDay},(_,i)=>new Date(year,month,i+1));
-  }else{
-    dates=[base];
-  }
-
-  let csv='\uFEFF日付,曜日';
-  chiefs.forEach(m=>csv+=`,${m.name}（現場）,${m.name}（時間）,${m.name}（備考）`);
-  staff.forEach(s=>csv+=`,${s.name}`);
-  csv+='\n';
-
-  dates.forEach(d=>{
-    const dk=dateKey(d);
-    const maxEntries=Math.max(1,...chiefs.map((_,mi)=>(csched[`${dk}__${mi}`]||[]).length));
-    for(let ei=0;ei<maxEntries;ei++){
-      csv+=ei===0?`${fmtS(d)},${fmtDow(d)}`:`${fmtS(d)},`;
-      chiefs.forEach((_,mi)=>{
-        const entries=sortE(csched[`${dk}__${mi}`]||[]);
-        const e=entries[ei];
-        if(e){
-          const time=e.start?(e.end?`${e.start}〜${e.end}`:`${e.start}〜`):'';
-          csv+=`,"${e.name}","${time}","${e.note||''}"`;
-        }else{
-          csv+=',,,';
-        }
-      });
-      if(ei===0){
-        staff.forEach((_,si)=>{
-          const v=ssched[`${dk}__${si}`]||'';
-          csv+=`,"${v}"`;
-        });
-      }else{
-        staff.forEach(()=>csv+=',');
-      }
-      csv+='\n';
-    }
-  });
-
-  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');
-  a.href=url;
-  a.download=`schedule_${fmtS(base).replace('/','')}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
 </script>
 </body>
 </html>
