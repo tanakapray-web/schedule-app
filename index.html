@@ -242,12 +242,12 @@ async function loadData(){
         S.stores = data.stores || S.stores;
         S.chiefs = data.chiefs || {};
         S.staff = data.staff || {};
-        S.csched = data.csched || {};
         S.ssched = data.ssched || {};
       }
     } catch(e) { /* GASオフライン時は無視 */ }
 
-    // Supabaseのスケジュールで上書き（金額等の情報を付加）
+    // 現場予定はSupabaseを唯一の正とする（GAS由来は使わず毎回作り直す → 2重表示・消失を防止）
+    S.csched = {};
     if (schedules && schedules.length) {
       schedules.forEach(row => {
         const dk = row.date;
@@ -314,6 +314,7 @@ async function saveToSupabase(entry, dk, mi) {
     schedule_type: entry.schedule_type || 'service',
   };
   try {
+    setStatus('保存中...','saving');
     if (entry.supabase_id) {
       await SB(`schedules?id=eq.${entry.supabase_id}`, {method:'PATCH', body: JSON.stringify(record)});
     } else {
@@ -321,12 +322,13 @@ async function saveToSupabase(entry, dk, mi) {
       const data = await res.json();
       if (data && data[0]) entry.supabase_id = data[0].id;
     }
-  } catch(e) { console.error('Supabase保存エラー', e); }
+    setStatus('保存しました '+new Date().toLocaleTimeString('ja-JP'),'saved');
+  } catch(e) { console.error('Supabase保存エラー', e); setStatus('保存失敗','error'); }
 }
 
 async function deleteFromSupabase(supabase_id) {
   if (!supabase_id) return;
-  try { await SB(`schedules?id=eq.${supabase_id}`, {method:'DELETE'}); } catch(e) {}
+  try { await SB(`schedules?id=eq.${supabase_id}`, {method:'DELETE'}); setStatus('削除しました '+new Date().toLocaleTimeString('ja-JP'),'saved'); } catch(e) {}
 }
 
 // GAS保存（既存データとの互換性のため残す）
@@ -334,7 +336,7 @@ async function saveData(){
   try {
     setStatus('保存中...','saving');
     const GAS_URL='https://script.google.com/macros/s/AKfycbwBfM71IBbrSjAMMO9doWohr4ZKCruekYVBHYBGSRVUidNkB97DQ08vXeBtQxJxQsLD/exec';
-    const payload={stores:S.stores,chiefs:S.chiefs,staff:S.staff,csched:S.csched,ssched:S.ssched};
+    const payload={stores:S.stores,chiefs:S.chiefs,staff:S.staff,ssched:S.ssched};
     await fetch(GAS_URL,{method:'POST',body:new URLSearchParams({action:'saveAll',data:JSON.stringify(payload)})});
     setStatus('保存完了: '+new Date().toLocaleTimeString('ja-JP'),'saved');
   } catch(e){setStatus('保存失敗','error');}
@@ -623,7 +625,7 @@ function doCopy(e){
   const newE={...e,repeatId:undefined,supabase_id:undefined};
   sched[key].push(newE);
   saveToSupabase(newE, dk, mi);
-  closeModal();render();saveData();
+  closeModal();render();
 }
 
 function selColor(i){document.getElementById('f-color').value=i;document.querySelectorAll('.color-swatch').forEach((el,idx)=>el.classList.toggle('selected',idx===i))}
@@ -673,7 +675,7 @@ function saveEntry(){
       saveToSupabase(rEntry, rdk, mi);
     });
   }
-  closeModal();render();saveData();
+  closeModal();render();
 }
 
 function updateEntry(){
@@ -685,14 +687,14 @@ function updateEntry(){
   const updated={...e,name,start,end,note,color,...sales};
   getCsched(S.deptIdx)[`${dk}__${mi}`][origIdx]=updated;
   saveToSupabase(updated, dk, mi);
-  closeModal();render();saveData();
+  closeModal();render();
 }
 
 function deleteEntry(){
   if(!editCtx)return;const{dk,mi,origIdx}=editCtx,sched=getCsched(S.deptIdx),key=`${dk}__${mi}`;
   const e=sched[key][origIdx];
   deleteFromSupabase(e.supabase_id);
-  sched[key].splice(origIdx,1);if(!sched[key].length)delete sched[key];closeModal();render();saveData();
+  sched[key].splice(origIdx,1);if(!sched[key].length)delete sched[key];closeModal();render();
 }
 
 function deleteRepeat(repeatId,mi){
@@ -705,7 +707,7 @@ function deleteRepeat(repeatId,mi){
       if(!sched[key].length)delete sched[key];
     }
   });
-  closeModal();render();saveData();
+  closeModal();render();
 }
 
 function exportCSV(){
