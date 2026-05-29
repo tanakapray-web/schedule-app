@@ -273,6 +273,7 @@ async function loadData(){
             category: row.category || '',
             route: row.route || '',
             amount: row.amount || null,
+            schedule_type: row.schedule_type || 'service',
           });
         }
       });
@@ -322,7 +323,7 @@ async function saveToSupabase(entry, dk, mi) {
       _res = await SB('schedules', {method:'POST', body: JSON.stringify(record)});
     }
     const _txt = await _res.text();
-    if (!_res.ok) { alert('保存できませんでした（理由）:\n' + _res.status + ' ' + _txt); throw new Error('save failed: ' + _txt); }
+    if (!_res.ok) { alert('保存に失敗しました:\n' + _res.status + ' ' + _txt); throw new Error('save failed: ' + _txt); }
     if (!entry.supabase_id) { try { const _d = JSON.parse(_txt); if (_d && _d[0]) entry.supabase_id = _d[0].id; } catch(_e) {} }
     setStatus('保存しました '+new Date().toLocaleTimeString('ja-JP'),'saved');
   } catch(e) { console.error('Supabase保存エラー', e); setStatus('保存失敗','error'); }
