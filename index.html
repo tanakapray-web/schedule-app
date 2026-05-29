@@ -311,6 +311,7 @@ async function saveToSupabase(entry, dk, mi) {
     category: entry.category || null,
     route: entry.route || null,
     amount: entry.amount ? parseInt(entry.amount) : null,
+    schedule_type: entry.schedule_type || 'service',
   };
   try {
     if (entry.supabase_id) {
@@ -436,9 +437,12 @@ function makeChiefCells(dk,di,wk,chiefs,csched){
     entries.forEach((e,ei)=>{
       const cidx=getEntryColor(e),c=ECOLORS[cidx],time=e.start?(e.end?`${e.start}〜${e.end}`:`${e.start}〜`):'';
       const isRep=e.repeatId?'repeating':'';
+      const stLabel=e.schedule_type?({'service':'🔧','estimate':'📋','other':'📅'}[e.schedule_type]||''):'';
       h+=`<div class="entry ${isRep}" style="background:${c.bg};color:${c.tc}" onclick="openEdit('${dk}',${mi},${ei})">`;
+      if(stLabel)h+=`<span style="font-size:9px;opacity:.75">${stLabel} </span>`;
       if(time)h+=`<span style="font-size:10px;opacity:.75">${time}</span><br>`;
       h+=`${e.name}`;
+      if(e.note)h+=`<span style="display:block;font-size:10px;opacity:.7;margin-top:1px;white-space:normal;">${e.note}</span>`;
       if(e.amount)h+=`<span style="display:block;font-size:9px;opacity:.8;margin-top:1px">¥${Number(e.amount).toLocaleString()}</span>`;
       if(e.repeatId)h+=`<span style="display:block;font-size:9px;opacity:.6;margin-top:1px">🔁</span>`;
       h+='</div>';
@@ -501,9 +505,10 @@ function renderDay(d){
         const cidx=getEntryColor(e),c=ECOLORS[cidx],time=e.start?(e.end?`${e.start}〜${e.end}`:`${e.start}〜`):'';
         const isRep=e.repeatId?'repeating':'';
         const storeName = e.store_id ? (SUPABASE_STORES.find(s=>s.id===e.store_id)?.name||'') : '';
+        const stIcon=e.schedule_type?({'service':'🔧','estimate':'📋','other':'📅'}[e.schedule_type]||''):'';
         h+=`<div class="day-entry-card ${isRep}" style="background:${c.bg};color:${c.tc}" onclick="openEdit('${dk}',${mi},${ei})">`;
         if(time)h+=`<div style="font-size:11px;opacity:.75;margin-bottom:2px">${time}</div>`;
-        h+=`<div style="font-weight:600;font-size:13px">${e.name}</div>`;
+        h+=`<div style="font-weight:600;font-size:13px">${stIcon?stIcon+' ':''}${e.name}</div>`;
         if(e.note)h+=`<div style="font-size:11px;margin-top:4px;opacity:.8">${e.note}</div>`;
         if(storeName||e.category||e.amount){
           h+=`<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:3px">`;
@@ -545,7 +550,14 @@ function openAdd(dk,mi){
     <div class="field"><label>備考</label><textarea id="f-note" placeholder="メモや詳細など"></textarea></div>
     <div class="field"><label>色</label><div class="color-row">${colorSwatchHTML(0)}</div></div>
     <input type="hidden" id="f-color" value="0" />
-    ${salesFormHTML(null)}
+    <div class="field"><label>予定区分</label>
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <label style="display:flex;align-items:center;gap:4px;font-size:14px;cursor:pointer"><input type="radio" name="f-stype" id="f-stype-service" value="service" checked> 🔧 サービス</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:14px;cursor:pointer"><input type="radio" name="f-stype" id="f-stype-estimate" value="estimate"> 📋 見積</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:14px;cursor:pointer"><input type="radio" name="f-stype" id="f-stype-other" value="other"> 📅 その他</label>
+      </div>
+    </div>
+    <div id="sales-form-wrap">${salesFormHTML(null)}</div>
     <div class="field" style="margin-top:12px"><label>繰り返し</label>
       <div class="repeat-section">
         <select id="f-repeat" onchange="toggleRepeatEnd()">${repeatOptsHTML('none')}</select>
@@ -571,7 +583,14 @@ function openEdit(dk,mi,ei){
     <div class="field"><label>現場名</label><input type="text" id="f-name" value="${e.name}" autocomplete="off" /></div>
     <div class="row2"><div class="field"><label>開始</label>${timePickerHTML('f-start',e.start||'')}</div><div class="field"><label>終了</label>${timePickerHTML('f-end',e.end||'')}</div></div>
     <div class="field"><label>備考</label><textarea id="f-note">${e.note||''}</textarea></div>
-    ${salesFormHTML(e)}
+    <div class="field"><label>予定区分</label>
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <label style="display:flex;align-items:center;gap:4px;font-size:14px;cursor:pointer"><input type="radio" name="f-stype" value="service" ${(!e.schedule_type||e.schedule_type==='service')?'checked':''}> 🔧 サービス</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:14px;cursor:pointer"><input type="radio" name="f-stype" value="estimate" ${e.schedule_type==='estimate'?'checked':''}> 📋 見積</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:14px;cursor:pointer"><input type="radio" name="f-stype" value="other" ${e.schedule_type==='other'?'checked':''}> 📅 その他</label>
+      </div>
+    </div>
+    <div id="sales-form-wrap">${salesFormHTML(e)}</div>
     <div class="modal-btns">
       <button class="btn danger" onclick="deleteEntry()">削除</button>
       ${e.repeatId?`<button class="btn danger" onclick="deleteRepeat('${e.repeatId}',${mi})">繰り返し全削除</button>`:''}
@@ -610,11 +629,15 @@ function doCopy(e){
 function selColor(i){document.getElementById('f-color').value=i;document.querySelectorAll('.color-swatch').forEach((el,idx)=>el.classList.toggle('selected',idx===i))}
 
 function getSalesFields() {
+  const stype = document.querySelector('input[name="f-stype"]:checked')?.value || 'service';
+  // サービス以外は売上情報を保存しない
+  const isService = stype === 'service';
   return {
-    store_id: document.getElementById('f-store')?.value || '',
-    category: document.getElementById('f-category')?.value || '',
-    route: document.getElementById('f-route')?.value || '',
-    amount: document.getElementById('f-amount')?.value || null,
+    schedule_type: stype,
+    store_id: isService ? (document.getElementById('f-store')?.value || '') : '',
+    category: isService ? (document.getElementById('f-category')?.value || '') : '',
+    route: isService ? (document.getElementById('f-route')?.value || '') : '',
+    amount: isService ? (document.getElementById('f-amount')?.value || null) : null,
   };
 }
 
