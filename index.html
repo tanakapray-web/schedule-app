@@ -317,7 +317,7 @@ async function saveToSupabase(entry, dk, mi) {
     setStatus('保存中...','saving');
     let _res;
     if (entry.supabase_id) {
-      _res = await SB(`schedules?id=eq.${entry.supabase_id}`, {method:'PATCH', body: JSON.stringify(record)});
+      _res = await SB(`schedules?id=eq.${encodeURIComponent(entry.supabase_id)}`, {method:'PATCH', body: JSON.stringify(record)});
     } else {
       _res = await SB('schedules', {method:'POST', body: JSON.stringify(record)});
     }
@@ -330,7 +330,7 @@ async function saveToSupabase(entry, dk, mi) {
 
 async function deleteFromSupabase(supabase_id) {
   if (!supabase_id) return;
-  try { await SB(`schedules?id=eq.${supabase_id}`, {method:'DELETE'}); setStatus('削除しました '+new Date().toLocaleTimeString('ja-JP'),'saved'); } catch(e) {}
+  try { await SB(`schedules?id=eq.${encodeURIComponent(supabase_id)}`, {method:'DELETE'}); setStatus('削除しました '+new Date().toLocaleTimeString('ja-JP'),'saved'); } catch(e) {}
 }
 
 // GAS保存（既存データとの互換性のため残す）
