@@ -421,6 +421,7 @@ function getEntryColor(e) {
 }
 
 function render(){
+  try{localStorage.setItem('schedView',JSON.stringify({view:S.view,offset:S.offset,deptIdx:S.deptIdx}));}catch(e){}
   const depts=getDepts();if(S.deptIdx>=depts.length)S.deptIdx=0;
   document.getElementById('dept-sel').innerHTML=depts.map((d,i)=>`<option value="${i}"${i===S.deptIdx?' selected':''}>${d.label}</option>`).join('');
   document.getElementById('page-title').textContent=depts[S.deptIdx]?.label||'スケジュール';
@@ -789,6 +790,7 @@ function showModal(){document.getElementById('modal-bg').style.display='flex'}
 function closeModal(){document.getElementById('modal-bg').style.display='none';render()}
 function closeBg(e){if(e.target.id==='modal-bg')closeModal()}
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
+try{const _vs=JSON.parse(localStorage.getItem('schedView')||'null');if(_vs){if(['day','week','month'].includes(_vs.view))S.view=_vs.view;if(typeof _vs.offset==='number')S.offset=_vs.offset;if(typeof _vs.deptIdx==='number')S.deptIdx=_vs.deptIdx;}}catch(e){}
 loadData();
 </script>
 </body>
