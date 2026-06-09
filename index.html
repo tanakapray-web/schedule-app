@@ -21,7 +21,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .btn.danger:active{background:#fcebeb}
 .btn.active{background:#f0efec;font-weight:500}
 .btn.save-btn{background:#1d9e75;color:#fff;border-color:#0f6e56}
-select,input[type=text],input[type=number],textarea{font-size:16px;padding:10px 12px;border-radius:8px;border:0.5px solid #ccc;background:#fff;color:#1a1a1a;width:100%;-webkit-appearance:none}
+select,input[type=text],textarea{font-size:16px;padding:10px 12px;border-radius:8px;border:0.5px solid #ccc;background:#fff;color:#1a1a1a;width:100%;-webkit-appearance:none}
 textarea{resize:vertical;min-height:70px;font-family:inherit}
 select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24'%3E%3Cpath fill='%23888' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:32px}
 .nav{display:flex;align-items:center;gap:8px;margin-bottom:10px}
@@ -65,7 +65,6 @@ th,td{border:0.5px solid #e0ded8}
 .field{margin-bottom:14px}
 .field label{font-size:13px;color:#888;display:block;margin-bottom:6px;font-weight:500}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
 .time-row{display:flex;align-items:center;gap:6px}
 .time-row select{flex:1}
 .time-sep{font-size:16px;color:#888;flex-shrink:0;font-weight:500}
@@ -84,11 +83,10 @@ th,td{border:0.5px solid #e0ded8}
 .day-chief-row{border:0.5px solid #e0ded8;border-radius:12px;margin-bottom:10px;overflow:hidden}
 .day-chief-head{padding:10px 14px;background:#f8f7f4;font-size:14px;font-weight:500;display:flex;align-items:center;gap:8px}
 .day-entries-wrap{display:flex;flex-wrap:wrap;gap:8px;padding:10px 14px}
-.day-entry-card{border-radius:8px;padding:8px 12px;font-size:13px;cursor:pointer;min-width:100px;max-width:200px;line-height:1.5;touch-action:manipulation;position:relative}
+.day-entry-card{border-radius:8px;padding:8px 12px;font-size:13px;cursor:pointer;min-width:100px;max-width:180px;line-height:1.5;touch-action:manipulation;position:relative}
 .day-entry-card:active{opacity:.7}
 .day-entry-card.repeating{border-left:3px solid #ba7517}
 .repeat-badge{display:inline-block;font-size:10px;background:#faeeda;color:#633806;border-radius:3px;padding:1px 5px;margin-top:3px}
-.sales-badge{display:inline-block;font-size:10px;background:#e1f5ee;color:#085041;border-radius:3px;padding:1px 5px;margin-top:2px}
 .staff-day-card{border:0.5px solid #e0ded8;border-radius:12px;overflow:hidden;margin-bottom:10px}
 .staff-day-row{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:0.5px solid #e0ded8;font-size:14px;cursor:pointer;min-height:52px;touch-action:manipulation}
 .staff-day-row:last-child{border-bottom:none}
@@ -101,9 +99,6 @@ th,td{border:0.5px solid #e0ded8}
 .fab:active{opacity:.8;transform:scale(.95)}
 .repeat-section{background:#f8f7f4;border-radius:8px;padding:12px;margin-top:4px}
 .repeat-section select{margin-top:6px}
-.sales-section{background:#f0faf5;border:0.5px solid #9fe1cb;border-radius:8px;padding:12px;margin-top:4px}
-.sales-section-title{font-size:12px;font-weight:500;color:#085041;margin-bottom:10px;display:flex;align-items:center;gap:4px}
-.store-color-dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:4px}
 @media(max-width:600px){
   body{padding-bottom:80px}
   .bottom-nav{display:block}
@@ -155,14 +150,7 @@ th,td{border:0.5px solid #e0ded8}
 </div>
 
 <script>
-// ========== Supabase設定 ==========
-const SUPABASE_URL = 'https://nxaepscqkxpldvunbhri.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_9sDcDJjq0wCdAP_9AkEXeQ_tvectEFa';
-const SB = (path, opts={}) => fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-  headers: {'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=representation', ...opts.headers},
-  ...opts
-});
-
+const GAS_URL='https://script.google.com/macros/s/AKfycbwBfM71IBbrSjAMMO9doWohr4ZKCruekYVBHYBGSRVUidNkB97DQ08vXeBtQxJxQsLD/exec';
 const ECOLORS=[
   {bg:'#E6F1FB',tc:'#0C447C',dot:'#185FA5',label:'青'},
   {bg:'#E1F5EE',tc:'#085041',dot:'#0F6E56',label:'緑'},
@@ -184,219 +172,30 @@ const REPEAT_OPTS=[
   {val:'every6m',label:'6ヶ月ごと'},
 ];
 
-// 店舗カラーマップ（store_idに対して色インデックスを返す）
-const STORE_COLORS = {};
-function getStoreColor(storeId) {
-  if (!storeId) return 0;
-  if (STORE_COLORS[storeId] === undefined) {
-    const keys = Object.keys(STORE_COLORS);
-    STORE_COLORS[storeId] = keys.length % ECOLORS.length;
-  }
-  return STORE_COLORS[storeId];
-}
-
-let S={view:'week',offset:0,deptIdx:0,stores:[],chiefs:{},staff:{},csched:{},ssched:{}};
-let SUPABASE_STORES = []; // Supabaseのstoresテーブルキャッシュ
-let CATS_DATA = {service:[], route:[]}; // catsテーブルキャッシュ
+let S={view:'week',offset:0,deptIdx:0,stores:[{name:'A店舗',depts:['〇事業部','△事業部','□事業部']},{name:'B店舗',depts:['〇事業部','△事業部']},{name:'C店舗',depts:['〇事業部']}],chiefs:{},staff:{},csched:{},ssched:{}};
 
 function setStatus(msg,type=''){const el=document.getElementById('status-bar');el.textContent=msg;el.className='status-bar'+(type?' '+type:'')}
-
-// ========== Supabaseからデータ読み込み ==========
 async function loadData(){
-  try {
-    setStatus('読み込み中...','saving');
-
-    // storesとcatsを並行取得
-    const [storesRes, catsRes, schedRes] = await Promise.all([
-      SB('stores?select=*&order=name'),
-      SB('cats?select=*'),
-      SB('schedules?select=*&order=date,chief_index')
-    ]);
-
-    const stores = await storesRes.json();
-    const cats = await catsRes.json();
-    const schedules = await schedRes.json();
-
-    SUPABASE_STORES = stores || [];
-    if (cats && cats[0]) {
-      CATS_DATA.service = cats[0].service || [];
-      CATS_DATA.route = cats[0].route || [];
-    }
-
-    // スケジュールデータをS.cschedに変換（既存形式を維持）
-    // storesからS.storesを構築
-    const storeMap = {};
-    SUPABASE_STORES.forEach(s => {
-      if (!storeMap[s.name]) storeMap[s.name] = {name: s.name, depts: []};
-      if (s.dept && !storeMap[s.name].depts.includes(s.dept)) storeMap[s.name].depts.push(s.dept);
-    });
-    // 既存データがあれば保持、なければSupabaseから構築
-    if (!S.stores || S.stores.length === 0) S.stores = Object.values(storeMap);
-
-    // GASからスケジュールデータも取得（既存の予定データ）
-    try {
-      const GAS_URL='https://script.google.com/macros/s/AKfycbwBfM71IBbrSjAMMO9doWohr4ZKCruekYVBHYBGSRVUidNkB97DQ08vXeBtQxJxQsLD/exec';
-      const res = await fetch(`${GAS_URL}?action=getAll`);
-      const data = await res.json();
-      if (data && data.stores) {
-        S.stores = data.stores || S.stores;
-        S.chiefs = data.chiefs || {};
-        S.staff = data.staff || {};
-        S.ssched = data.ssched || {};
-      }
-    } catch(e) { /* GASオフライン時は無視 */ }
-
-    // 現場予定はSupabaseを唯一の正とする（GAS由来は使わず毎回作り直す → 2重表示・消失を防止）
-    S.csched = {};
-    if (schedules && schedules.length) {
-      schedules.forEach(row => {
-        const dk = row.date;
-        const mi = row.chief_index;
-        const di = row.dept ? getDeptIndexByDept(row.dept) : 0;
-        const dkey_str = `d${di}`;
-        if (!S.csched[dkey_str]) S.csched[dkey_str] = {};
-        const key = `${dk}__${mi}`;
-        if (!S.csched[dkey_str][key]) S.csched[dkey_str][key] = [];
-        // 同名エントリがなければ追加
-        const exists = S.csched[dkey_str][key].find(e => e.name === row.name && e.supabase_id === row.id);
-        if (!exists) {
-          S.csched[dkey_str][key].push({
-            name: row.name || '',
-            start: row.start_time || '',
-            end: row.end_time || '',
-            note: row.note || '',
-            color: row.store_id ? getStoreColor(row.store_id) : (row.color || 0),
-            repeatId: row.repeat_id || undefined,
-            supabase_id: row.id,
-            store_id: row.store_id || '',
-            dept: row.dept || '',
-            category: row.category || '',
-            route: row.route || '',
-            amount: row.amount || null,
-            schedule_type: row.schedule_type || 'service',
-          });
-        }
-      });
-    }
-
-    setStatus('最終読込: '+new Date().toLocaleTimeString('ja-JP'),'saved');
-  } catch(e) {
-    setStatus('オフラインで使用中','error');
-  }
-  render();
+  try{setStatus('読み込み中...','saving');const res=await fetch(`${GAS_URL}?action=getAll`);const data=await res.json();
+  if(data&&data.stores){S.stores=data.stores||S.stores;S.chiefs=data.chiefs||{};S.staff=data.staff||{};S.csched=data.csched||{};S.ssched=data.ssched||{};}
+  setStatus('最終読込: '+new Date().toLocaleTimeString('ja-JP'),'saved');}catch(e){setStatus('オフラインで使用中','error');}render();
 }
-
-function getDeptIndexByDept(dept) {
-  const depts = getDepts();
-  const idx = depts.findIndex(d => d.label.includes(dept));
-  return idx >= 0 ? idx : 0;
-}
-
-// ========== Supabaseに保存 ==========
-async function saveToSupabase(entry, dk, mi) {
-  const depts = getDepts();
-  const dept = depts[S.deptIdx];
-  const storeId = entry.store_id || null;
-  const record = {
-    id: entry.supabase_id || `${dept?.label||''}__${dk}__${mi}__${Date.now()}`,
-    date: dk,
-    chief_index: mi,
-    store_id: storeId,
-    dept: dept?.label || '',
-    name: entry.name,
-    start_time: entry.start || null,
-    end_time: entry.end || null,
-    note: entry.note || null,
-    color: entry.color || 0,
-    repeat_id: entry.repeatId || null,
-    category: entry.category || null,
-    route: entry.route || null,
-    amount: entry.amount ? parseInt(entry.amount) : null,
-    schedule_type: entry.schedule_type || 'service',
-  };
-  try {
-    setStatus('保存中...','saving');
-    let _res;
-    if (entry.supabase_id) {
-      _res = await SB(`schedules?id=eq.${encodeURIComponent(entry.supabase_id)}`, {method:'PATCH', body: JSON.stringify(record)});
-    } else {
-      _res = await SB('schedules', {method:'POST', body: JSON.stringify(record)});
-    }
-    const _txt = await _res.text();
-    if (!_res.ok) { alert('保存に失敗しました:\n' + _res.status + ' ' + _txt); throw new Error('save failed: ' + _txt); }
-    if (!entry.supabase_id) { try { const _d = JSON.parse(_txt); if (_d && _d[0]) entry.supabase_id = _d[0].id; } catch(_e) {} }
-    setStatus('保存しました '+new Date().toLocaleTimeString('ja-JP'),'saved');
-  } catch(e) { console.error('Supabase保存エラー', e); setStatus('保存失敗','error'); }
-}
-
-async function deleteFromSupabase(supabase_id) {
-  if (!supabase_id) return;
-  try { await SB(`schedules?id=eq.${encodeURIComponent(supabase_id)}`, {method:'DELETE'}); setStatus('削除しました '+new Date().toLocaleTimeString('ja-JP'),'saved'); } catch(e) {}
-}
-
-// GAS保存（既存データとの互換性のため残す）
 async function saveData(){
-  try {
-    setStatus('保存中...','saving');
-    const GAS_URL='https://script.google.com/macros/s/AKfycbwBfM71IBbrSjAMMO9doWohr4ZKCruekYVBHYBGSRVUidNkB97DQ08vXeBtQxJxQsLD/exec';
-    const payload={stores:S.stores,chiefs:S.chiefs,staff:S.staff,ssched:S.ssched};
-    await fetch(GAS_URL,{method:'POST',body:new URLSearchParams({action:'saveAll',data:JSON.stringify(payload)})});
-    setStatus('保存完了: '+new Date().toLocaleTimeString('ja-JP'),'saved');
-  } catch(e){setStatus('保存失敗','error');}
+  try{setStatus('保存中...','saving');const payload={stores:S.stores,chiefs:S.chiefs,staff:S.staff,csched:S.csched,ssched:S.ssched};
+  await fetch(GAS_URL,{method:'POST',body:new URLSearchParams({action:'saveAll',data:JSON.stringify(payload)})});
+  setStatus('保存完了: '+new Date().toLocaleTimeString('ja-JP'),'saved');}catch(e){setStatus('保存失敗','error');}
 }
 
 function hourOpts(s){let h='<option value="">−</option>';for(let i=6;i<=23;i++){const v=String(i).padStart(2,'0');h+=`<option value="${v}"${v===s?' selected':''}>${v}</option>`}return h}
 function minOpts(s){let h='<option value="">−</option>';['00','15','30','45'].forEach(m=>h+=`<option value="${m}"${m===s?' selected':''}>${m}</option>`);return h}
 function timePickerHTML(prefix,val){const p=val?val.split(':'):['',''];return`<div class="time-row"><select id="${prefix}-h">${hourOpts(p[0]||'')}</select><span class="time-sep">:</span><select id="${prefix}-m">${minOpts(p[1]||'')}</select></div>`}
 function getTime(prefix){const h=document.getElementById(`${prefix}-h`)?.value,m=document.getElementById(`${prefix}-m`)?.value;return(h&&m)?`${h}:${m}`:''}
+
 function repeatOptsHTML(sel){return REPEAT_OPTS.map(o=>`<option value="${o.val}"${o.val===sel?' selected':''}>${o.label}</option>`).join('')}
-
-// ========== 店舗・区分・受注経路の選択肢HTML ==========
-function storeOptsHTML(sel) {
-  let h = '<option value="">未選択</option>';
-  SUPABASE_STORES.forEach(s => h += `<option value="${s.id}"${s.id===sel?' selected':''}>${s.name}${s.dept?' '+s.dept:''}</option>`);
-  return h;
-}
-function categoryOptsHTML(sel) {
-  let h = '<option value="">未選択</option>';
-  (CATS_DATA.service||[]).forEach(c => {
-    const v = typeof c === 'string' ? c : (c.name||c);
-    h += `<option value="${v}"${v===sel?' selected':''}>${v}</option>`;
-  });
-  return h;
-}
-function routeOptsHTML(sel, storeId) {
-  let h = '<option value="">未選択</option>';
-  const st = storeId ? SUPABASE_STORES.find(s=>s.id===storeId) : null;
-  const list = (st && Array.isArray(st.routes) && st.routes.length) ? st.routes : (CATS_DATA.route||[]);
-  list.forEach(r => {
-    const v = typeof r === 'string' ? r : (r.name||r);
-    h += `<option value="${v}"${v===sel?' selected':''}>${v}</option>`;
-  });
-  return h;
-}
-function onSchedStoreChange(){
-  const sid = document.getElementById('f-store') ? document.getElementById('f-store').value : '';
-  const rs = document.getElementById('f-route');
-  if (rs) rs.innerHTML = routeOptsHTML('', sid);
-}
-
-// 売上情報フォームHTML
-function salesFormHTML(e) {
-  return `<div class="sales-section">
-    <div class="sales-section-title"><i class="ti ti-currency-yen" style="font-size:14px"></i> 売上情報</div>
-    <div class="field"><label>店舗</label><select id="f-store" onchange="onSchedStoreChange()">${storeOptsHTML(e?.store_id||'')}</select></div>
-    <div class="row2">
-      <div class="field"><label>区分</label><select id="f-category">${categoryOptsHTML(e?.category||'')}</select></div>
-      <div class="field"><label>受注経路</label><select id="f-route">${routeOptsHTML(e?.route||'', e?.store_id||'')}</select></div>
-    </div>
-    <div class="field"><label>金額（円）</label><input type="number" id="f-amount" placeholder="例：50000" value="${e?.amount||''}" style="font-size:16px" /></div>
-  </div>`;
-}
 
 function dkey(di){return`d${di}`}
 function getDepts(){const r=[];S.stores.forEach((s,si)=>s.depts.forEach((d,di)=>r.push({label:`${s.name} ${d}`,si,di})));return r}
-function getChiefs(di){if(!S.chiefs[dkey(di)])S.chiefs[dkey(di)]=[];return S.chiefs[dkey(di)]}
+function getChiefs(di){if(!S.chiefs[dkey(di)])S.chiefs[dkey(di)]=di===0?[{name:'島村'},{name:'森園'},{name:'河合'}]:[];return S.chiefs[dkey(di)]}
 function getStaff(di){if(!S.staff[dkey(di)])S.staff[dkey(di)]=[];return S.staff[dkey(di)]}
 function getCsched(di){if(!S.csched[dkey(di)])S.csched[dkey(di)]={};return S.csched[dkey(di)]}
 function getSsched(di){if(!S.ssched[dkey(di)])S.ssched[dkey(di)]={};return S.ssched[dkey(di)]}
@@ -412,23 +211,32 @@ function isWeekend(d){return d.getDay()===0||d.getDay()===6}
 function getBase(){const t=today();if(S.view==='day'){const d=new Date(t);d.setDate(d.getDate()+S.offset);return d}if(S.view==='week'){const m=mondayOf(t);m.setDate(m.getDate()+S.offset*7);return m}return new Date(t.getFullYear(),t.getMonth()+S.offset,1)}
 function sortE(e){return[...e].sort((a,b)=>(a.start||'99:99').localeCompare(b.start||'99:99'))}
 
+// 繰り返し日付を生成
 function getRepeatDates(startDk, repeat){
-  const dates=[];const start=parseDateKey(startDk);const end=new Date(start);end.setFullYear(end.getFullYear()+1);let cur=new Date(start);
+  const dates=[];
+  const start=parseDateKey(startDk);
+  const end=new Date(start);
+  end.setFullYear(end.getFullYear()+1);
+  let cur=new Date(start);
   cur.setDate(cur.getDate()+(repeat==='biweekly'?7:repeat==='weekly'?7:0));
-  if(repeat==='weekly'||repeat==='biweekly'){const step=repeat==='biweekly'?14:7;while(cur<=end){dates.push(dateKey(cur));cur.setDate(cur.getDate()+step);}}
-  else if(repeat==='monthly'||repeat.startsWith('every')){let months=1;if(repeat==='every2m')months=2;else if(repeat==='every3m')months=3;else if(repeat==='every4m')months=4;else if(repeat==='every5m')months=5;else if(repeat==='every6m')months=6;
-    cur=new Date(start);cur.setMonth(cur.getMonth()+months);while(cur<=end){dates.push(dateKey(cur));cur.setMonth(cur.getMonth()+months);}}
+  if(repeat==='weekly'||repeat==='biweekly'){
+    const step=repeat==='biweekly'?14:7;
+    while(cur<=end){dates.push(dateKey(cur));cur.setDate(cur.getDate()+step);}
+  }else if(repeat==='monthly'||repeat.startsWith('every')){
+    let months=1;
+    if(repeat==='every2m')months=2;
+    else if(repeat==='every3m')months=3;
+    else if(repeat==='every4m')months=4;
+    else if(repeat==='every5m')months=5;
+    else if(repeat==='every6m')months=6;
+    cur=new Date(start);
+    cur.setMonth(cur.getMonth()+months);
+    while(cur<=end){dates.push(dateKey(cur));cur.setMonth(cur.getMonth()+months);}
+  }
   return dates;
 }
 
-function getEntryColor(e) {
-  // 店舗IDがあれば店舗カラー、なければe.colorを使う
-  if (e.store_id) return getStoreColor(e.store_id);
-  return e.color || 0;
-}
-
 function render(){
-  try{localStorage.setItem('schedView',JSON.stringify({view:S.view,offset:S.offset,deptIdx:S.deptIdx}));}catch(e){}
   const depts=getDepts();if(S.deptIdx>=depts.length)S.deptIdx=0;
   document.getElementById('dept-sel').innerHTML=depts.map((d,i)=>`<option value="${i}"${i===S.deptIdx?' selected':''}>${d.label}</option>`).join('');
   document.getElementById('page-title').textContent=depts[S.deptIdx]?.label||'スケジュール';
@@ -448,15 +256,12 @@ function makeChiefCells(dk,di,wk,chiefs,csched){
     const entries=sortE(csched[`${dk}__${mi}`]||[]);
     h+=`<td class="td-chief${wk?' weekend':''}">`;
     entries.forEach((e,ei)=>{
-      const cidx=getEntryColor(e),c=ECOLORS[cidx],time=e.start?(e.end?`${e.start}〜${e.end}`:`${e.start}〜`):'';
+      const c=ECOLORS[e.color||0],time=e.start?(e.end?`${e.start}〜${e.end}`:`${e.start}〜`):'';
       const isRep=e.repeatId?'repeating':'';
-      const stLabel=e.schedule_type?({'service':'🔧','estimate':'📋','other':'📅'}[e.schedule_type]||''):'';
       h+=`<div class="entry ${isRep}" style="background:${c.bg};color:${c.tc}" onclick="openEdit('${dk}',${mi},${ei})">`;
-      if(stLabel)h+=`<span style="font-size:9px;opacity:.75">${stLabel} </span>`;
       if(time)h+=`<span style="font-size:10px;opacity:.75">${time}</span><br>`;
       h+=`${e.name}`;
-      if(e.note)h+=`<span style="display:block;font-size:10px;opacity:.7;margin-top:1px;white-space:normal;">${e.note}</span>`;
-      if(e.amount)h+=`<span style="display:block;font-size:9px;opacity:.8;margin-top:1px">¥${Number(e.amount).toLocaleString()}</span>`;
+      if(e.assignedStaff&&e.assignedStaff.length)h+=`<span style="display:block;font-size:9px;margin-top:2px;opacity:.8">👤 ${e.assignedStaff.join('・')}</span>`;
       if(e.repeatId)h+=`<span style="display:block;font-size:9px;opacity:.6;margin-top:1px">🔁</span>`;
       h+='</div>';
     });
@@ -515,21 +320,13 @@ function renderDay(d){
       h+=`<div class="day-chief-row"><div class="day-chief-head"><div class="avatar" style="display:inline-flex;width:28px;height:28px;background:${CAVS[mi%8]};font-size:12px">${m.name[0]}</div><span style="flex:1;font-size:15px">${m.name}</span><button class="btn primary" style="padding:8px 12px;font-size:13px;min-height:40px" onclick="openAdd('${dk}',${mi})"><i class="ti ti-plus"></i> 追加</button></div><div class="day-entries-wrap">`;
       if(!entries.length)h+=`<span style="font-size:13px;color:#bbb">予定なし</span>`;
       else entries.forEach((e,ei)=>{
-        const cidx=getEntryColor(e),c=ECOLORS[cidx],time=e.start?(e.end?`${e.start}〜${e.end}`:`${e.start}〜`):'';
+        const c=ECOLORS[e.color||0],time=e.start?(e.end?`${e.start}〜${e.end}`:`${e.start}〜`):'';
         const isRep=e.repeatId?'repeating':'';
-        const storeName = e.store_id ? (SUPABASE_STORES.find(s=>s.id===e.store_id)?.name||'') : '';
-        const stIcon=e.schedule_type?({'service':'🔧','estimate':'📋','other':'📅'}[e.schedule_type]||''):'';
         h+=`<div class="day-entry-card ${isRep}" style="background:${c.bg};color:${c.tc}" onclick="openEdit('${dk}',${mi},${ei})">`;
         if(time)h+=`<div style="font-size:11px;opacity:.75;margin-bottom:2px">${time}</div>`;
-        h+=`<div style="font-weight:600;font-size:13px">${stIcon?stIcon+' ':''}${e.name}</div>`;
+        h+=`<div style="font-weight:600;font-size:13px">${e.name}</div>`;
         if(e.note)h+=`<div style="font-size:11px;margin-top:4px;opacity:.8">${e.note}</div>`;
-        if(storeName||e.category||e.amount){
-          h+=`<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:3px">`;
-          if(storeName)h+=`<span class="sales-badge">${storeName}</span>`;
-          if(e.category)h+=`<span class="sales-badge">${e.category}</span>`;
-          if(e.amount)h+=`<span class="sales-badge">¥${Number(e.amount).toLocaleString()}</span>`;
-          h+=`</div>`;
-        }
+        if(e.assignedStaff&&e.assignedStaff.length)h+=`<div style="font-size:11px;margin-top:4px;color:#0f6e56">👤 ${e.assignedStaff.join('・')}</div>`;
         if(e.repeatId)h+=`<div class="repeat-badge">🔁 繰り返し</div>`;
         h+='</div>';});
       h+='</div></div>';});
@@ -563,15 +360,7 @@ function openAdd(dk,mi){
     <div class="field"><label>備考</label><textarea id="f-note" placeholder="メモや詳細など"></textarea></div>
     <div class="field"><label>色</label><div class="color-row">${colorSwatchHTML(0)}</div></div>
     <input type="hidden" id="f-color" value="0" />
-    <div class="field"><label>予定区分</label>
-      <div style="display:flex;gap:8px;margin-top:4px">
-        <label style="display:flex;align-items:center;gap:4px;font-size:14px;cursor:pointer"><input type="radio" name="f-stype" id="f-stype-service" value="service" checked> 🔧 サービス</label>
-        <label style="display:flex;align-items:center;gap:4px;font-size:14px;cursor:pointer"><input type="radio" name="f-stype" id="f-stype-estimate" value="estimate"> 📋 見積</label>
-        <label style="display:flex;align-items:center;gap:4px;font-size:14px;cursor:pointer"><input type="radio" name="f-stype" id="f-stype-other" value="other"> 📅 その他</label>
-      </div>
-    </div>
-    <div id="sales-form-wrap">${salesFormHTML(null)}</div>
-    <div class="field" style="margin-top:12px"><label>繰り返し</label>
+    <div class="field"><label>繰り返し</label>
       <div class="repeat-section">
         <select id="f-repeat" onchange="toggleRepeatEnd()">${repeatOptsHTML('none')}</select>
         <div id="repeat-end-wrap" style="display:none;margin-top:10px">
@@ -592,26 +381,71 @@ function toggleRepeatEnd(){
 function openEdit(dk,mi,ei){
   const sched=getCsched(S.deptIdx),entries=sched[`${dk}__${mi}`]||[],sorted=sortE(entries),e=sorted[ei];
   if(!e)return;const origIdx=entries.indexOf(e);editCtx={dk,mi,origIdx};
+  // その日出勤のスタッフ一覧
+  const di=S.deptIdx,staff=getStaff(di),ssched=getSsched(di);
+  const onDuty=staff.filter((_,si)=>ssched[`${dk}__${si}`]==='出勤');
+  const assigned=e.assignedStaff||[];
+  const staffHTML=onDuty.length?`
+    <div class="field"><label>同行スタッフ（その日出勤中）</label>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px">
+        ${onDuty.map(s=>`<label style="display:flex;align-items:center;gap:6px;font-size:14px;padding:6px 10px;border:0.5px solid #ccc;border-radius:8px;cursor:pointer;background:${assigned.includes(s.name)?'#e1f5ee':'#fff'}">
+          <input type="checkbox" value="${s.name}" ${assigned.includes(s.name)?'checked':''} style="width:16px;height:16px" onchange="updateStaffCheckStyle(this)" />
+          ${s.name}
+        </label>`).join('')}
+      </div>
+    </div>`:'<div class="field" style="font-size:13px;color:#bbb">この日は出勤スタッフがいません</div>';
   document.getElementById('modal-box').innerHTML=mHTML('予定を編集',`
     <div class="field"><label>現場名</label><input type="text" id="f-name" value="${e.name}" autocomplete="off" /></div>
     <div class="row2"><div class="field"><label>開始</label>${timePickerHTML('f-start',e.start||'')}</div><div class="field"><label>終了</label>${timePickerHTML('f-end',e.end||'')}</div></div>
     <div class="field"><label>備考</label><textarea id="f-note">${e.note||''}</textarea></div>
-    <div class="field"><label>予定区分</label>
-      <div style="display:flex;gap:8px;margin-top:4px">
-        <label style="display:flex;align-items:center;gap:4px;font-size:14px;cursor:pointer"><input type="radio" name="f-stype" value="service" ${(!e.schedule_type||e.schedule_type==='service')?'checked':''}> 🔧 サービス</label>
-        <label style="display:flex;align-items:center;gap:4px;font-size:14px;cursor:pointer"><input type="radio" name="f-stype" value="estimate" ${e.schedule_type==='estimate'?'checked':''}> 📋 見積</label>
-        <label style="display:flex;align-items:center;gap:4px;font-size:14px;cursor:pointer"><input type="radio" name="f-stype" value="other" ${e.schedule_type==='other'?'checked':''}> 📅 その他</label>
-      </div>
-    </div>
-    <div id="sales-form-wrap">${salesFormHTML(e)}</div>
+    ${staffHTML}
+    <div class="field"><label>色</label><div class="color-row">${colorSwatchHTML(e.color||0)}</div></div>
+    <input type="hidden" id="f-color" value="${e.color||0}" />
     <div class="modal-btns">
       <button class="btn danger" onclick="deleteEntry()">削除</button>
       ${e.repeatId?`<button class="btn danger" onclick="deleteRepeat('${e.repeatId}',${mi})">繰り返し全削除</button>`:''}
       <button class="btn" onclick="closeModal()">キャンセル</button>
       <button class="btn" onclick="openCopy('${dk}',${mi},${origIdx})"><i class="ti ti-copy"></i> コピー</button>
+      <button class="btn" onclick="openMove('${dk}',${mi},${origIdx})"><i class="ti ti-arrows-move"></i> 移動</button>
       <button class="btn primary" onclick="updateEntry()">保存</button>
     </div>`);
   showModal();setTimeout(()=>document.getElementById('f-name').focus(),100);
+}
+
+function updateStaffCheckStyle(el){
+  el.closest('label').style.background=el.checked?'#e1f5ee':'#fff';
+}
+
+function openMove(dk,mi,origIdx){
+  const sched=getCsched(S.deptIdx),e=sched[`${dk}__${mi}`][origIdx];
+  if(!e)return;
+  const di=S.deptIdx,chiefs=getChiefs(di),base=getBase();
+  let dateOpts='';
+  const days=S.view==='week'?7:S.view==='month'?new Date(base.getFullYear(),base.getMonth()+1,0).getDate():1;
+  for(let i=0;i<days;i++){const d=new Date(base);d.setDate(d.getDate()+i);dateOpts+=`<option value="${dateKey(d)}"${dateKey(d)===dk?' selected':''}>${fmtS(d)}（${fmtDow(d)}）</option>`}
+  document.getElementById('modal-box').innerHTML=mHTML('予定を移動',`
+    <div class="field"><label>移動する予定</label><div style="font-size:14px;font-weight:500;padding:8px;background:#f8f7f4;border-radius:8px">${e.name}${e.start?' ('+e.start+(e.end?'〜'+e.end:'')+')'  :''}</div></div>
+    <div class="field"><label>移動先の日付</label><select id="move-date">${dateOpts}</select></div>
+    <div class="field"><label>移動先のチーフ</label><select id="move-member">${chiefs.map((m,i)=>`<option value="${i}"${i===mi?' selected':''}>${m.name}</option>`).join('')}</select></div>
+    <div class="modal-btns">
+      <button class="btn" onclick="openEdit('${dk}',${mi},${origIdx})">戻る</button>
+      <button class="btn primary" onclick="doMove('${dk}',${mi},${origIdx})"><i class="ti ti-arrows-move"></i> 移動</button>
+    </div>`);
+}
+
+function doMove(dk,mi,origIdx){
+  const newDk=document.getElementById('move-date').value;
+  const newMi=parseInt(document.getElementById('move-member').value);
+  const sched=getCsched(S.deptIdx);
+  const e=sched[`${dk}__${mi}`][origIdx];
+  // 元の場所から削除
+  sched[`${dk}__${mi}`].splice(origIdx,1);
+  if(!sched[`${dk}__${mi}`].length)delete sched[`${dk}__${mi}`];
+  // 移動先に追加
+  const newKey=`${newDk}__${newMi}`;
+  if(!sched[newKey])sched[newKey]=[];
+  sched[newKey].push(e);
+  closeModal();render();saveData();
 }
 
 function openCopy(dk,mi,origIdx){
@@ -633,79 +467,52 @@ function doCopy(e){
   const mi=parseInt(document.getElementById('copy-member').value);
   const sched=getCsched(S.deptIdx),key=`${dk}__${mi}`;
   if(!sched[key])sched[key]=[];
-  const newE={...e,repeatId:undefined,supabase_id:undefined};
+  const newE={...e,repeatId:undefined};
   sched[key].push(newE);
-  saveToSupabase(newE, dk, mi);
-  closeModal();render();
+  closeModal();render();saveData();
 }
 
 function selColor(i){document.getElementById('f-color').value=i;document.querySelectorAll('.color-swatch').forEach((el,idx)=>el.classList.toggle('selected',idx===i))}
 
-function getSalesFields() {
-  const stype = document.querySelector('input[name="f-stype"]:checked')?.value || 'service';
-  // サービス以外は売上情報を保存しない
-  const isService = stype === 'service';
-  return {
-    schedule_type: stype,
-    store_id: isService ? (document.getElementById('f-store')?.value || '') : '',
-    category: isService ? (document.getElementById('f-category')?.value || '') : '',
-    route: isService ? (document.getElementById('f-route')?.value || '') : '',
-    amount: isService ? (document.getElementById('f-amount')?.value || null) : null,
-  };
-}
-
 function saveEntry(){
   const di=S.deptIdx,dk=document.getElementById('f-date').value,mi=parseInt(document.getElementById('f-member')?.value||0);
   const name=document.getElementById('f-name').value.trim();if(!name)return;
-  const start=getTime('f-start'),end=getTime('f-end'),note=document.getElementById('f-note').value.trim();
+  const start=getTime('f-start'),end=getTime('f-end'),note=document.getElementById('f-note').value.trim(),color=parseInt(document.getElementById('f-color').value||0);
   const repeat=document.getElementById('f-repeat')?.value||'none';
-  const sales=getSalesFields();
-  // 店舗IDがあれば色を自動設定、なければ青(0)
-  const color = parseInt(document.getElementById("f-color")?.value||0);
   const sched=getCsched(di),key=`${dk}__${mi}`;
   if(!sched[key])sched[key]=[];
 
   if(repeat==='none'){
-    const entry={name,start,end,note,color,...sales};
-    sched[key].push(entry);
-    saveToSupabase(entry, dk, mi);
+    sched[key].push({name,start,end,note,color});
   } else {
     const repeatId='r'+Date.now();
-    const entry={name,start,end,note,color,repeatId,...sales};
-    sched[key].push(entry);
-    saveToSupabase(entry, dk, mi);
+    sched[key].push({name,start,end,note,color,repeatId});
     const endInput=document.getElementById('f-repeat-end')?.value;
-    let endDate=new Date(parseDateKey(dk));endDate.setFullYear(endDate.getFullYear()+1);
+    let endDate=new Date(parseDateKey(dk));
+    endDate.setFullYear(endDate.getFullYear()+1);
     if(endInput){const parts=endInput.split('/');if(parts.length===3)endDate=new Date(parseInt(parts[0]),parseInt(parts[1])-1,parseInt(parts[2]));}
     const repeatDates=getRepeatDates(dk,repeat);
     repeatDates.forEach(rdk=>{
       if(parseDateKey(rdk)>endDate)return;
       if(!sched[`${rdk}__${mi}`])sched[`${rdk}__${mi}`]=[];
-      const rEntry={name,start,end,note,color,repeatId,...sales,supabase_id:undefined};
-      sched[`${rdk}__${mi}`].push(rEntry);
-      saveToSupabase(rEntry, rdk, mi);
+      sched[`${rdk}__${mi}`].push({name,start,end,note,color,repeatId});
     });
   }
-  closeModal();render();
+  closeModal();render();saveData();
 }
 
 function updateEntry(){
   if(!editCtx)return;const{dk,mi,origIdx}=editCtx;const name=document.getElementById('f-name').value.trim();if(!name)return;
-  const start=getTime('f-start'),end=getTime('f-end'),note=document.getElementById('f-note').value.trim();
-  const sales=getSalesFields();
-  const color = parseInt(document.getElementById('f-color')?.value||0);
+  const start=getTime('f-start'),end=getTime('f-end'),note=document.getElementById('f-note').value.trim(),color=parseInt(document.getElementById('f-color').value||0);
+  const assignedStaff=[...document.querySelectorAll('#modal-box input[type=checkbox]:checked')].map(el=>el.value);
   const e=getCsched(S.deptIdx)[`${dk}__${mi}`][origIdx];
-  const updated={...e,name,start,end,note,color,...sales};
-  getCsched(S.deptIdx)[`${dk}__${mi}`][origIdx]=updated;
-  saveToSupabase(updated, dk, mi);
-  closeModal();render();
+  getCsched(S.deptIdx)[`${dk}__${mi}`][origIdx]={...e,name,start,end,note,color,assignedStaff};
+  closeModal();render();saveData();
 }
 
 function deleteEntry(){
   if(!editCtx)return;const{dk,mi,origIdx}=editCtx,sched=getCsched(S.deptIdx),key=`${dk}__${mi}`;
-  const e=sched[key][origIdx];
-  deleteFromSupabase(e.supabase_id);
-  sched[key].splice(origIdx,1);if(!sched[key].length)delete sched[key];closeModal();render();
+  sched[key].splice(origIdx,1);if(!sched[key].length)delete sched[key];closeModal();render();saveData();
 }
 
 function deleteRepeat(repeatId,mi){
@@ -713,12 +520,11 @@ function deleteRepeat(repeatId,mi){
   const sched=getCsched(S.deptIdx);
   Object.keys(sched).forEach(key=>{
     if(key.endsWith(`__${mi}`)){
-      sched[key].forEach(e=>{if(e.repeatId===repeatId)deleteFromSupabase(e.supabase_id);});
       sched[key]=sched[key].filter(e=>e.repeatId!==repeatId);
       if(!sched[key].length)delete sched[key];
     }
   });
-  closeModal();render();
+  closeModal();render();saveData();
 }
 
 function exportCSV(){
@@ -728,7 +534,7 @@ function exportCSV(){
   else if(S.view==='month'){const year=base.getFullYear(),month=base.getMonth();const lastDay=new Date(year,month+1,0).getDate();dates=Array.from({length:lastDay},(_,i)=>new Date(year,month,i+1));}
   else{dates=[base];}
   let csv='\uFEFF日付,曜日';
-  chiefs.forEach(m=>csv+=`,${m.name}（現場）,${m.name}（時間）,${m.name}（備考）,${m.name}（店舗）,${m.name}（区分）,${m.name}（受注経路）,${m.name}（金額）`);
+  chiefs.forEach(m=>csv+=`,${m.name}（現場）,${m.name}（時間）,${m.name}（備考）`);
   staff.forEach(s=>csv+=`,${s.name}`);csv+='\n';
   dates.forEach(d=>{
     const dk=dateKey(d);
@@ -736,10 +542,8 @@ function exportCSV(){
     for(let ei=0;ei<maxE;ei++){
       csv+=ei===0?`${fmtS(d)},${fmtDow(d)}`:`${fmtS(d)},`;
       chiefs.forEach((_,mi)=>{const entries=sortE(csched[`${dk}__${mi}`]||[]);const e=entries[ei];
-        if(e){const time=e.start?(e.end?`${e.start}〜${e.end}`:`${e.start}〜`):'';
-          const storeName=e.store_id?(SUPABASE_STORES.find(s=>s.id===e.store_id)?.name||''):'';
-          csv+=`,"${e.name}","${time}","${e.note||''}","${storeName}","${e.category||''}","${e.route||''}","${e.amount||''}"`;
-        }else{csv+=',,,,,,,';} });
+        if(e){const time=e.start?(e.end?`${e.start}〜${e.end}`:`${e.start}〜`):'';csv+=`,"${e.name}","${time}","${e.note||''}"`;
+        }else{csv+=',,,';} });
       if(ei===0){staff.forEach((_,si)=>{const v=ssched[`${dk}__${si}`]||'';csv+=`,"${v}"`;});}
       else{staff.forEach(()=>csv+=',');}csv+='\n';}});
   const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
@@ -797,7 +601,6 @@ function showModal(){document.getElementById('modal-bg').style.display='flex'}
 function closeModal(){document.getElementById('modal-bg').style.display='none';render()}
 function closeBg(e){if(e.target.id==='modal-bg')closeModal()}
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
-try{const _vs=JSON.parse(localStorage.getItem('schedView')||'null');if(_vs){if(['day','week','month'].includes(_vs.view))S.view=_vs.view;if(typeof _vs.offset==='number')S.offset=_vs.offset;if(typeof _vs.deptIdx==='number')S.deptIdx=_vs.deptIdx;}}catch(e){}
 loadData();
 </script>
 </body>
