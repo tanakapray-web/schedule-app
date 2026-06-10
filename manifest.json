@@ -1,24 +1,24 @@
 {
-    "name": "スケジュール管理",
-    "short_name": "スケジュール",
-    "description": "PRAY HIRA スケジュール管理アプリ",
-    "start_url": "./",
-    "display": "standalone",
-    "background_color": "#f8f7f4",
-    "theme_color": "#185fa5",
-    "orientation": "portrait-primary",
-    "icons": [
-          {
-                  "src": "icon-192.png",
-                  "sizes": "192x192",
-                  "type": "image/png",
-                  "purpose": "any maskable"
-          },
-          {
-                  "src": "icon-512.png",
-                  "sizes": "512x512",
-                  "type": "image/png",
-                  "purpose": "any maskable"
-          }
-    ]
+  "name": "スケジュール管理",
+  "short_name": "スケジュール",
+  "description": "PRAY HIRA スケジュール管理",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f3f2ee",
+  "theme_color": "#2f74d0",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
 }
