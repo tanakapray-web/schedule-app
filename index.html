@@ -277,8 +277,21 @@ async function loadData(){
     if (schedules && schedules.length) {
       schedules.forEach(row => {
         const dk = row.date;
-        const mi = row.chief_index;
-        const di = row.store_id ? getDeptIndexByDept(row.store_id) : (row.dept ? getDeptIndexByDept(row.dept) : 0);
+        // 部署の特定: schedule_dept_id > store_id > dept名 の順で優先
+        let di = 0;
+        if (row.schedule_dept_id) {
+          const idx = SUPABASE_STORES.findIndex(s => s.id === row.schedule_dept_id);
+          di = idx >= 0 ? idx : getDeptIndexByDept(row.store_id || row.dept || '');
+        } else {
+          di = row.store_id ? getDeptIndexByDept(row.store_id) : (row.dept ? getDeptIndexByDept(row.dept) : 0);
+        }
+        // チーフのインデックス: chief_name があれば名前でマッチ、なければ chief_index
+        let mi = row.chief_index || 0;
+        if (row.chief_name) {
+          const chiefs = S.chiefs[`d${di}`] || [];
+          const byName = chiefs.findIndex(c => c.name === row.chief_name);
+          if (byName >= 0) mi = byName;
+        }
         const dkey_str = `d${di}`;
         if (!S.csched[dkey_str]) S.csched[dkey_str] = {};
         const key = `${dk}__${mi}`;
@@ -334,10 +347,14 @@ async function saveToSupabase(entry, dk, mi) {
   const depts = getDepts();
   const dept = depts[S.deptIdx];
   const storeId = entry.store_id || null;
+  const chiefName = getChiefs(S.deptIdx)[mi]?.name || entry.chief_name || '';
+  const deptId = SUPABASE_STORES[S.deptIdx]?.id || '';
   const record = {
     id: entry.supabase_id || `${dept?.label||''}__${dk}__${mi}__${Date.now()}`,
     date: dk,
     chief_index: mi,
+    chief_name: chiefName,
+    schedule_dept_id: deptId,
     store_id: storeId,
     dept: dept?.label || '',
     name: entry.name,
