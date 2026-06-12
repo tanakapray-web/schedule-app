@@ -311,8 +311,12 @@ async function loadData(){
 }
 
 function getDeptIndexByDept(deptOrId) {
-  // store_id で検索
+  if(!deptOrId) return 0;
+  // schedule_depts.id で検索
   let idx = SUPABASE_STORES.findIndex(s => s.id === deptOrId);
+  if (idx >= 0) return idx;
+  // schedule_depts.store_id（売上アプリのstore_id）で検索 ← 既存の予定の紐づけに使う
+  idx = SUPABASE_STORES.findIndex(s => s.store_id === deptOrId);
   if (idx >= 0) return idx;
   // dept名で検索
   const depts = getDepts();
