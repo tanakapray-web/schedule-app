@@ -126,6 +126,7 @@ th,td{border:0.5px solid #e0ded8}
   <div class="topbar">
     <h2 id="page-title">スケジュール</h2>
     <select id="dept-sel" onchange="changeDept()" style="width:auto;max-width:160px;font-size:13px;padding:7px 28px 7px 10px"></select>
+    <button id="combined-btn" class="btn" onclick="toggleCombined()" style="font-size:12px;padding:6px 12px;white-space:nowrap;">合同表示</button>
     <button class="btn" onclick="openSettings()"><i class="ti ti-settings"></i> <span class="btn-label">管理</span></button>
     <button class="btn save-btn" onclick="saveData()"><i class="ti ti-cloud-upload"></i> <span class="btn-label">保存</span></button>
     <button class="btn" onclick="exportCSV()"><i class="ti ti-download"></i> <span class="btn-label">出力</span></button>
@@ -417,7 +418,8 @@ function repeatOptsHTML(sel){return REPEAT_OPTS.map(o=>`<option value="${o.val}"
 // ========== 店舗・区分・受注経路の選択肢HTML ==========
 function storeOptsHTML(sel) {
   let h = '<option value="">未選択</option>';
-  SUPABASE_STORES.forEach(s => h += `<option value="${s.id}"${s.id===sel?' selected':''}>${s.name}${s.dept?' '+s.dept:''}</option>`);
+  const list = SALES_STORES.length ? SALES_STORES : SUPABASE_STORES;
+  list.forEach(s => h += `<option value="${s.id}"${s.id===sel?' selected':''}>${s.name}${s.dept?' '+s.dept:''}</option>`);
   return h;
 }
 function categoryOptsHTML(sel) {
@@ -552,12 +554,21 @@ function renderTableHead(chiefs,staff){
 }
 
 function renderWeek(mon){
-  const di=S.deptIdx,chiefs=getChiefs(di),staff=getStaff(di),csched=getCsched(di),ssched=getSsched(di);
+  const di=S.deptIdx;
+  const chiefs = combinedView ? getCombinedChiefs() : getChiefs(di);
+  const staff  = combinedView ? getCombinedStaff()  : getStaff(di);
   const dates=Array.from({length:7},(_,i)=>{const d=new Date(mon);d.setDate(d.getDate()+i);return d});
   let h=`<div class="table-wrap"><table>${renderTableHead(chiefs,staff)}<tbody>`;
   dates.forEach(d=>{const dk=dateKey(d),wk=isWeekend(d),tod=isToday(d);
     h+=`<tr><td class="td-date${wk?' weekend':''}${tod?' today-c':''}">${fmtS(d)}<br><span style="font-size:10px">${fmtDow(d)}</span></td>`;
-    h+=makeChiefCells(dk,di,wk,chiefs,csched)+makeStaffCells(dk,di,wk,staff,ssched)+'</tr>';});
+    if(combinedView){
+      // 合同表示: 各チーフのdi別にcsched/sschedを参照
+      h+=chiefs.map((c,mi)=>{const cdi=c._di;return makeChiefCells(dk,cdi,wk,[c],getCsched(cdi));}).join('');
+      h+=staff.map((s,si)=>{const sdi=s._di;return makeStaffCells(dk,sdi,wk,[s],getSsched(sdi));}).join('');
+    } else {
+      h+=makeChiefCells(dk,di,wk,chiefs,getCsched(di))+makeStaffCells(dk,di,wk,staff,getSsched(di));
+    }
+    h+='</tr>';});
   document.getElementById('view-area').innerHTML=h+'</tbody></table></div>';
 }
 
@@ -985,6 +996,26 @@ function addStaff(){const n=document.getElementById('new-staff')?.value.trim();i
 function delStaff(i){if(!confirm('削除しますか？'))return;getStaff(S.deptIdx).splice(i,1);render();renderStaffTab();saveData();}
 function setView(v){S.view=v;S.offset=0;render()}
 function shiftPeriod(n){S.offset+=n;render()}
+let combinedView = false;
+function toggleCombined(){
+  combinedView = !combinedView;
+  const btn = document.getElementById('combined-btn');
+  if(btn) btn.className = 'btn' + (combinedView ? ' active' : '');
+  const sel = document.getElementById('dept-sel');
+  if(sel) sel.style.opacity = combinedView ? '0.4' : '1';
+  render();
+}
+// 合同表示時: 全部署のchiefsを結合して返す
+function getCombinedChiefs(){
+  const all = [];
+  getDepts().forEach((_,i) => getChiefs(i).forEach((c,ci) => all.push({...c, _di:i, _ci:ci})));
+  return all;
+}
+function getCombinedStaff(){
+  const all = [];
+  getDepts().forEach((_,i) => getStaff(i).forEach((s,si) => all.push({...s, _di:i, _si:si})));
+  return all;
+}
 function changeDept(){S.deptIdx=parseInt(document.getElementById('dept-sel').value);render()}
 function showModal(){document.getElementById('modal-bg').style.display='flex'}
 function closeModal(){document.getElementById('modal-bg').style.display='none';render()}
