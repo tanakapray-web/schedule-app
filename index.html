@@ -376,46 +376,29 @@ async function deleteFromSupabase(supabase_id) {
 async function saveData(){
   try {
     setStatus('保存中...','saving');
-    // chiefs / staff を schedule_staff テーブルに保存（既存レコードの更新のみ・重複防止）
+    // 出勤データのみ保存（chiefs/staffはaddChief/addStaffで個別に保存）
     for (let i = 0; i < SUPABASE_STORES.length; i++) {
-      const dept = SUPABASE_STORES[i];
-      const stableId = dept.store_id || dept.id;
-      const allP = [
-        ...(S.chiefs[`d${i}`]||[]).map((c,ci)=>({...c,store_id:stableId,type:'chief',sort_order:ci})),
-        ...(S.staff[`d${i}`] ||[]).map((p,pi)=>({...p,store_id:stableId,type:'staff', sort_order:pi}))
-      ];
-      for(const p of allP){
-        if(!p.id) continue; // IDがないレコードはスキップ（新規追加はaddChief/addStaffで行う）
-        await SB(`schedule_staff?id=eq.${encodeURIComponent(p.id)}`,{method:'PATCH',body:JSON.stringify({name:p.name,sort_order:p.sort_order,store_id:stableId})});
-      }
-    }
-    // 出勤データを schedule_attendance に保存（部署×月ごと）
-    const months = [...new Set(Object.keys(S.ssched).map(k => k.split('__')[1]).filter(Boolean))];
-    for (let i = 0; i < SUPABASE_STORES.length; i++) {
-      const sid = SUPABASE_STORES[i].id;
+      const stableId = SUPABASE_STORES[i].store_id || SUPABASE_STORES[i].id;
       const dk = `d${i}`;
       const relevantMonths = [...new Set(
-        Object.keys(S.ssched).filter(k => k.startsWith(dk+'__')).map(k => k.split('__')[1]).filter(Boolean)
+        Object.keys(S.ssched).filter(k=>k.startsWith(dk+'__')).map(k=>k.split('__')[1]).filter(Boolean)
       )];
-      for (const month of relevantMonths) {
-        const data = {};
-        Object.entries(S.ssched).forEach(([k, v]) => {
-          if (k.startsWith(`${dk}__${month}`)) {
-            data[k.slice(dk.length + 1)] = v;
-          }
+      for(const month of relevantMonths){
+        const data={};
+        Object.entries(S.ssched).forEach(([k,v])=>{
+          if(k.startsWith(`${dk}__`)&&k.includes(month)) data[k.slice(dk.length+1)]=v;
         });
-        const existRes = await SB(`schedule_attendance?store_id=eq.${encodeURIComponent(sid)}&month=eq.${encodeURIComponent(month)}`);
-        const existing = await existRes.json();
-        if (existing && existing.length > 0) {
-          await SB(`schedule_attendance?id=eq.${encodeURIComponent(existing[0].id)}`, {method:'PATCH', body: JSON.stringify({data})});
+        const existRes=await SB(`schedule_attendance?store_id=eq.${encodeURIComponent(stableId)}&month=eq.${encodeURIComponent(month)}`);
+        const existing=await existRes.json();
+        if(existing&&existing.length>0){
+          await SB(`schedule_attendance?id=eq.${encodeURIComponent(existing[0].id)}`,{method:'PATCH',body:JSON.stringify({data})});
         } else {
-          const newId = `att_${sid}_${month}`;
-          await SB('schedule_attendance', {method:'POST', body: JSON.stringify({id: newId, store_id: sid, month, data})});
+          await SB('schedule_attendance',{method:'POST',body:JSON.stringify({id:`att_${stableId}_${month}`,store_id:stableId,month,data})});
         }
       }
     }
     setStatus('保存完了: '+new Date().toLocaleTimeString('ja-JP'),'saved');
-  } catch(e){ console.error('saveData error', e); setStatus('保存失敗','error'); }
+  } catch(e){ console.error('saveData error',e); setStatus('保存失敗','error'); }
 }
 
 function hourOpts(s){let h='<option value="">−</option>';for(let i=6;i<=23;i++){const v=String(i).padStart(2,'0');h+=`<option value="${v}"${v===s?' selected':''}>${v}</option>`}return h}
@@ -679,27 +662,39 @@ function staffPickerHTML(dk, selected){
 }
 function getSelectedStaff(){return [...document.querySelectorAll('input[name="f-staff"]:checked')].map(c=>c.value);}
 function openMove(dk,mi,origIdx,ei){
-  const di=S.deptIdx,chiefs=getChiefs(di);
+  const depts=getDepts();
+  const chiefs=getChiefs(S.deptIdx);
+  const deptOpts=depts.map((d,i)=>`<option value="${i}"${i===S.deptIdx?' selected':''}>${d.label}</option>`).join('');
+  const chiefOpts=chiefs.map((c,i)=>`<option value="${i}"${i===mi?' selected':''}>${c.name}</option>`).join('');
   document.getElementById('modal-box').innerHTML=mHTML('予定を移動',`
     <div class="field"><label>移動先の日付</label><input type="date" id="mv-date" value="${dk}" style="font-size:16px"></div>
-    <div class="field"><label>移動先のチーフ</label><select id="mv-chief">${chiefs.map((m,i)=>`<option value="${i}"${i===mi?' selected':''}>${m.name}</option>`).join('')}</select></div>
+    <div class="field"><label>移動先の部署</label><select id="mv-dept" onchange="onMoveDeptChange()" style="font-size:15px">${deptOpts}</select></div>
+    <div class="field"><label>移動先のチーフ</label><select id="mv-chief" style="font-size:15px">${chiefOpts}</select></div>
     <div class="modal-btns">
       <button class="btn" onclick="openEdit('${dk}',${mi},${ei})">戻る</button>
-      <button class="btn primary" onclick="doMove('${dk}',${mi},${origIdx})"><i class="ti ti-arrows-move"></i> この内容で移動</button>
+      <button class="btn primary" onclick="doMove('${dk}',${mi},${origIdx})">この内容で移動</button>
     </div>`);
   showModal();
+}
+function onMoveDeptChange(){
+  const newDi=parseInt(document.getElementById('mv-dept').value);
+  const chiefs=getChiefs(newDi);
+  document.getElementById('mv-chief').innerHTML=chiefs.map((c,i)=>`<option value="${i}">${c.name}</option>`).join('');
 }
 function doMove(oldDk,oldMi,origIdx){
   const di=S.deptIdx,sched=getCsched(di);
   const arr=sched[`${oldDk}__${oldMi}`];if(!arr||!arr[origIdx])return;
   const e=arr[origIdx];
   const newDk=document.getElementById('mv-date').value;
+  const newDi=parseInt(document.getElementById('mv-dept').value);
   const newMi=parseInt(document.getElementById('mv-chief').value);
   if(!newDk){alert('日付を選んでください');return;}
-  if(newDk===oldDk&&newMi===oldMi){closeModal();return;}
   arr.splice(origIdx,1);
-  const nk=`${newDk}__${newMi}`;if(!sched[nk])sched[nk]=[];sched[nk].push(e);
-  saveToSupabase(e, newDk, newMi);
+  const newSched=getCsched(newDi);
+  const nk=`${newDk}__${newMi}`;
+  if(!newSched[nk])newSched[nk]=[];
+  newSched[nk].push(e);
+  saveToSupabase(e,newDk,newMi);
   closeModal();render();
 }
 function colorSwatchHTML(sel){return ECOLORS.map((c,i)=>`<div class="color-swatch${i===sel?' selected':''}" style="background:${c.dot}" onclick="selColor(${i})" title="${c.label}"></div>`).join('')}
