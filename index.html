@@ -376,7 +376,7 @@ async function deleteFromSupabase(supabase_id) {
 async function saveData(){
   try {
     setStatus('保存中...','saving');
-    // chiefs / staff を schedule_staff テーブルに保存（部署を消しても残る）
+    // chiefs / staff を schedule_staff テーブルに保存（既存レコードの更新のみ・重複防止）
     for (let i = 0; i < SUPABASE_STORES.length; i++) {
       const dept = SUPABASE_STORES[i];
       const stableId = dept.store_id || dept.id;
@@ -385,14 +385,8 @@ async function saveData(){
         ...(S.staff[`d${i}`] ||[]).map((p,pi)=>({...p,store_id:stableId,type:'staff', sort_order:pi}))
       ];
       for(const p of allP){
-        if(!p.id) p.id = 'sc_'+Date.now()+'_'+Math.random().toString(36).slice(2);
-        const chk = await SB(`schedule_staff?id=eq.${encodeURIComponent(p.id)}`);
-        const existing = await chk.json();
-        if(existing&&existing.length>0){
-          await SB(`schedule_staff?id=eq.${encodeURIComponent(p.id)}`,{method:'PATCH',body:JSON.stringify({name:p.name,sort_order:p.sort_order})});
-        } else {
-          await SB('schedule_staff',{method:'POST',body:JSON.stringify(p)});
-        }
+        if(!p.id) continue; // IDがないレコードはスキップ（新規追加はaddChief/addStaffで行う）
+        await SB(`schedule_staff?id=eq.${encodeURIComponent(p.id)}`,{method:'PATCH',body:JSON.stringify({name:p.name,sort_order:p.sort_order,store_id:stableId})});
       }
     }
     // 出勤データを schedule_attendance に保存（部署×月ごと）
