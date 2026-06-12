@@ -205,21 +205,23 @@ let CATS_DATA = {service:[], route:[]}; // catsテーブルキャッシュ
 
 function setStatus(msg,type=''){const el=document.getElementById('status-bar');el.textContent=msg;el.className='status-bar'+(type?' '+type:'')}
 
-// ========== Supabaseからデータ読み込み ==========
+// ========== Supabaseからデータ読み込み（GAS不要・完全Supabase一本化）==========
 async function loadData(){
   try {
     setStatus('読み込み中...','saving');
 
-    // storesとcatsを並行取得
-    const [storesRes, catsRes, schedRes] = await Promise.all([
-      SB('stores?select=*&order=name'),
+    // stores / cats / schedules / attendance を並行取得
+    const [storesRes, catsRes, schedRes, attendRes] = await Promise.all([
+      SB('stores?select=*&order=created_at'),
       SB('cats?select=*'),
-      SB('schedules?select=*&order=date,chief_index')
+      SB('schedules?select=*&order=date,chief_index'),
+      SB('schedule_attendance?select=*')
     ]);
 
     const stores = await storesRes.json();
     const cats = await catsRes.json();
     const schedules = await schedRes.json();
+    const attendances = await attendRes.json();
 
     SUPABASE_STORES = stores || [];
     if (cats && cats[0]) {
@@ -227,28 +229,34 @@ async function loadData(){
       CATS_DATA.route = cats[0].route || [];
     }
 
-    // スケジュールデータをS.cschedに変換（既存形式を維持）
-    // storesからS.storesを構築
-    const storeMap = {};
-    SUPABASE_STORES.forEach(s => {
-      if (!storeMap[s.name]) storeMap[s.name] = {name: s.name, depts: []};
-      if (s.dept && !storeMap[s.name].depts.includes(s.dept)) storeMap[s.name].depts.push(s.dept);
-    });
-    // 既存データがあれば保持、なければSupabaseから構築
-    if (!S.stores || S.stores.length === 0) S.stores = Object.values(storeMap);
+    // 部署リスト: 各storeを1つの部署として扱う
+    S.stores = SUPABASE_STORES.map(s => ({
+      id: s.id,
+      name: s.name + (s.dept ? ' ' + s.dept : ''),
+      depts: ['']
+    }));
 
-    // GASからスケジュールデータも取得（既存の予定データ）
-    try {
-      const GAS_URL='https://script.google.com/macros/s/AKfycbwBfM71IBbrSjAMMO9doWohr4ZKCruekYVBHYBGSRVUidNkB97DQ08vXeBtQxJxQsLD/exec';
-      const res = await fetch(`${GAS_URL}?action=getAll`);
-      const data = await res.json();
-      if (data && data.stores) {
-        S.stores = data.stores || S.stores;
-        S.chiefs = data.chiefs || {};
-        S.staff = data.staff || {};
-        S.ssched = data.ssched || {};
-      }
-    } catch(e) { /* GASオフライン時は無視 */ }
+    // chiefs / staff を stores から読み込む（dkeyはインデックスベース）
+    S.chiefs = {};
+    S.staff = {};
+    SUPABASE_STORES.forEach((s, i) => {
+      const dk = `d${i}`;
+      S.chiefs[dk] = Array.isArray(s.chiefs) ? s.chiefs : [];
+      S.staff[dk] = Array.isArray(s.staff) ? s.staff : [];
+    });
+
+    // 出勤データを schedule_attendance から読み込む
+    S.ssched = {};
+    if (attendances && attendances.length) {
+      attendances.forEach(rec => {
+        const si = SUPABASE_STORES.findIndex(s => s.id === rec.store_id);
+        if (si < 0 || !rec.data) return;
+        const dk = `d${si}`;
+        Object.entries(rec.data).forEach(([k, v]) => {
+          S.ssched[`${dk}__${k}`] = v;
+        });
+      });
+    }
 
     // 現場予定はSupabaseを唯一の正とする（GAS由来は使わず毎回作り直す → 2重表示・消失を防止）
     S.csched = {};
@@ -291,9 +299,13 @@ async function loadData(){
   render();
 }
 
-function getDeptIndexByDept(dept) {
+function getDeptIndexByDept(deptOrId) {
+  // store_id で検索
+  let idx = SUPABASE_STORES.findIndex(s => s.id === deptOrId);
+  if (idx >= 0) return idx;
+  // dept名で検索
   const depts = getDepts();
-  const idx = depts.findIndex(d => d.label.includes(dept));
+  idx = depts.findIndex(d => d.label.includes(deptOrId));
   return idx >= 0 ? idx : 0;
 }
 
@@ -344,11 +356,41 @@ async function deleteFromSupabase(supabase_id) {
 async function saveData(){
   try {
     setStatus('保存中...','saving');
-    const GAS_URL='https://script.google.com/macros/s/AKfycbwBfM71IBbrSjAMMO9doWohr4ZKCruekYVBHYBGSRVUidNkB97DQ08vXeBtQxJxQsLD/exec';
-    const payload={stores:S.stores,chiefs:S.chiefs,staff:S.staff,ssched:S.ssched};
-    await fetch(GAS_URL,{method:'POST',body:new URLSearchParams({action:'saveAll',data:JSON.stringify(payload)})});
+    // chiefs / staff を stores テーブルに保存
+    for (let i = 0; i < SUPABASE_STORES.length; i++) {
+      const s = SUPABASE_STORES[i];
+      const chiefs = S.chiefs[`d${i}`] || [];
+      const staff  = S.staff[`d${i}`]  || [];
+      const r = await SB(`stores?id=eq.${encodeURIComponent(s.id)}`, {method:'PATCH', body: JSON.stringify({chiefs, staff})});
+      if (r.ok) { s.chiefs = chiefs; s.staff = staff; }
+    }
+    // 出勤データを schedule_attendance に保存（部署×月ごと）
+    const months = [...new Set(Object.keys(S.ssched).map(k => k.split('__')[1]).filter(Boolean))];
+    for (let i = 0; i < SUPABASE_STORES.length; i++) {
+      const sid = SUPABASE_STORES[i].id;
+      const dk = `d${i}`;
+      const relevantMonths = [...new Set(
+        Object.keys(S.ssched).filter(k => k.startsWith(dk+'__')).map(k => k.split('__')[1]).filter(Boolean)
+      )];
+      for (const month of relevantMonths) {
+        const data = {};
+        Object.entries(S.ssched).forEach(([k, v]) => {
+          if (k.startsWith(`${dk}__${month}`)) {
+            data[k.slice(dk.length + 1)] = v;
+          }
+        });
+        const existRes = await SB(`schedule_attendance?store_id=eq.${encodeURIComponent(sid)}&month=eq.${encodeURIComponent(month)}`);
+        const existing = await existRes.json();
+        if (existing && existing.length > 0) {
+          await SB(`schedule_attendance?id=eq.${encodeURIComponent(existing[0].id)}`, {method:'PATCH', body: JSON.stringify({data})});
+        } else {
+          const newId = `att_${sid}_${month}`;
+          await SB('schedule_attendance', {method:'POST', body: JSON.stringify({id: newId, store_id: sid, month, data})});
+        }
+      }
+    }
     setStatus('保存完了: '+new Date().toLocaleTimeString('ja-JP'),'saved');
-  } catch(e){setStatus('保存失敗','error');}
+  } catch(e){ console.error('saveData error', e); setStatus('保存失敗','error'); }
 }
 
 function hourOpts(s){let h='<option value="">−</option>';for(let i=6;i<=23;i++){const v=String(i).padStart(2,'0');h+=`<option value="${v}"${v===s?' selected':''}>${v}</option>`}return h}
@@ -401,7 +443,10 @@ function salesFormHTML(e) {
 }
 
 function dkey(di){return`d${di}`}
-function getDepts(){const r=[];S.stores.forEach((s,si)=>s.depts.forEach((d,di)=>r.push({label:`${s.name} ${d}`,si,di})));return r}
+function getDepts(){
+  if(SUPABASE_STORES.length) return SUPABASE_STORES.map((s,i)=>({label:s.name+(s.dept?' '+s.dept:''),si:i,di:0,id:s.id}));
+  return S.stores.map((s,si)=>({label:s.name+(s.depts&&s.depts[0]?' '+s.depts[0]:''),si,di:0}));
+}
 function getChiefs(di){if(!S.chiefs[dkey(di)])S.chiefs[dkey(di)]=[];return S.chiefs[dkey(di)]}
 function getStaff(di){if(!S.staff[dkey(di)])S.staff[dkey(di)]=[];return S.staff[dkey(di)]}
 function getCsched(di){if(!S.csched[dkey(di)])S.csched[dkey(di)]={};return S.csched[dkey(di)]}
@@ -554,7 +599,25 @@ function renderDay(d){
   document.getElementById('view-area').innerHTML=h;
 }
 
-function toggleStaff(dk,si){const ss=getSsched(S.deptIdx),key=`${dk}__${si}`,cur=ss[key]||'';ss[key]=cur===''?'出勤':cur==='出勤'?'休日':'';render();saveData();}
+function toggleStaff(dk,si){const ss=getSsched(S.deptIdx),key=`${dk}__${si}`,cur=ss[key]||'';ss[key]=cur===''?'出勤':cur==='出勤'?'休日':'';render();saveAttendance(S.deptIdx,dk);}
+async function saveAttendance(di, dk){
+  const sid=SUPABASE_STORES[di]?.id;if(!sid)return;
+  const month=dk.slice(0,7);
+  const dkPrefix=`d${di}`;
+  const data={};
+  Object.entries(S.ssched).forEach(([k,v])=>{
+    if(k.startsWith(`${dkPrefix}__`)&&k.includes(month)){
+      data[k.slice(dkPrefix.length+1)]=v;
+    }
+  });
+  const existRes=await SB(`schedule_attendance?store_id=eq.${encodeURIComponent(sid)}&month=eq.${encodeURIComponent(month)}`);
+  const existing=await existRes.json();
+  if(existing&&existing.length>0){
+    await SB(`schedule_attendance?id=eq.${encodeURIComponent(existing[0].id)}`,{method:'PATCH',body:JSON.stringify({data})});
+  } else {
+    await SB('schedule_attendance',{method:'POST',body:JSON.stringify({id:`att_${sid}_${month}`,store_id:sid,month,data})});
+  }
+}
 
 let editCtx=null;
 function staffPickerHTML(dk, selected){
@@ -833,10 +896,10 @@ function addStore(){S.stores.push({name:'新しい店舗',depts:['〇事業部']
 function delStore(si){if(!confirm('削除しますか？'))return;S.stores.splice(si,1);render();renderStoreTab()}
 function addDept(si){S.stores[si].depts.push('新しい部署');render();renderStoreTab()}
 function delDept(si,di){if(!confirm('削除しますか？'))return;S.stores[si].depts.splice(di,1);render();renderStoreTab()}
-function addChief(){const n=document.getElementById('new-chief')?.value.trim();if(!n)return;getChiefs(S.deptIdx).push({name:n});render();renderChiefTab()}
-function delChief(i){if(!confirm('削除しますか？'))return;getChiefs(S.deptIdx).splice(i,1);render();renderChiefTab()}
-function addStaff(){const n=document.getElementById('new-staff')?.value.trim();if(!n)return;getStaff(S.deptIdx).push({name:n});render();renderStaffTab()}
-function delStaff(i){if(!confirm('削除しますか？'))return;getStaff(S.deptIdx).splice(i,1);render();renderStaffTab()}
+function addChief(){const n=document.getElementById('new-chief')?.value.trim();if(!n)return;getChiefs(S.deptIdx).push({name:n});render();renderChiefTab();saveData();}
+function delChief(i){if(!confirm('削除しますか？'))return;getChiefs(S.deptIdx).splice(i,1);render();renderChiefTab();saveData();}
+function addStaff(){const n=document.getElementById('new-staff')?.value.trim();if(!n)return;getStaff(S.deptIdx).push({name:n});render();renderStaffTab();saveData();}
+function delStaff(i){if(!confirm('削除しますか？'))return;getStaff(S.deptIdx).splice(i,1);render();renderStaffTab();saveData();}
 function setView(v){S.view=v;S.offset=0;render()}
 function shiftPeriod(n){S.offset+=n;render()}
 function changeDept(){S.deptIdx=parseInt(document.getElementById('dept-sel').value);render()}
