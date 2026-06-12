@@ -1018,10 +1018,7 @@ async function addChief(){const n=document.getElementById('new-chief')?.value.tr
 async function delChief(i){if(!confirm('削除しますか？'))return;const chiefs=S.chiefs[`d${S.deptIdx}`]||[];const p=chiefs[i];if(p&&p.id)await SB(`schedule_staff?id=eq.${encodeURIComponent(p.id)}`,{method:'DELETE'});chiefs.splice(i,1);render();renderChiefTab();}
 async function addStaff(){const n=document.getElementById('new-staff')?.value.trim();if(!n)return;const stableId=getStableId(S.deptIdx);if(!stableId)return;const newP={id:'sc_'+Date.now(),store_id:stableId,name:n,type:'staff',sort_order:(S.staff[`d${S.deptIdx}`]||[]).length};const res=await SB('schedule_staff',{method:'POST',body:JSON.stringify(newP)});if(res.ok){if(!S.staff[`d${S.deptIdx}`])S.staff[`d${S.deptIdx}`]=[];S.staff[`d${S.deptIdx}`].push(newP);render();renderStaffTab();document.getElementById('new-staff').value='';setStatus('保存しました','saved');}else{alert('保存に失敗しました');}}
 async function delStaff(i){if(!confirm('削除しますか？'))return;const staff=S.staff[`d${S.deptIdx}`]||[];const p=staff[i];if(p&&p.id)await SB(`schedule_staff?id=eq.${encodeURIComponent(p.id)}`,{method:'DELETE'});staff.splice(i,1);render();renderStaffTab();}
-function addChief(){const n=document.getElementById('new-chief')?.value.trim();if(!n)return;getChiefs(S.deptIdx).push({name:n});render();renderChiefTab();saveData();}
-function delChief(i){if(!confirm('削除しますか？'))return;getChiefs(S.deptIdx).splice(i,1);render();renderChiefTab();saveData();}
-function addStaff(){const n=document.getElementById('new-staff')?.value.trim();if(!n)return;getStaff(S.deptIdx).push({name:n});render();renderStaffTab();saveData();}
-function delStaff(i){if(!confirm('削除しますか？'))return;getStaff(S.deptIdx).splice(i,1);render();renderStaffTab();saveData();}
+
 function setView(v){S.view=v;S.offset=0;render()}
 function shiftPeriod(n){S.offset+=n;render()}
 let combinedView = false;
