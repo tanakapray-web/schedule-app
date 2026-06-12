@@ -317,13 +317,13 @@ async function loadData(){
 
 function getDeptIndexByDept(deptOrId) {
   if(!deptOrId) return 0;
-  // schedule_depts.id で検索
   let idx = SUPABASE_STORES.findIndex(s => s.id === deptOrId);
   if (idx >= 0) return idx;
-  // schedule_depts.store_id（売上アプリのstore_id）で検索 ← 既存の予定の紐づけに使う
   idx = SUPABASE_STORES.findIndex(s => s.store_id === deptOrId);
   if (idx >= 0) return idx;
-  // dept名で検索
+  // linked_store_ids（スケジュール専用部署に複数の売上店舗を紐づける）
+  idx = SUPABASE_STORES.findIndex(s => Array.isArray(s.linked_store_ids) && s.linked_store_ids.includes(deptOrId));
+  if (idx >= 0) return idx;
   const depts = getDepts();
   idx = depts.findIndex(d => d.label.includes(deptOrId));
   return idx >= 0 ? idx : 0;
@@ -570,7 +570,7 @@ function renderTableHead(chiefs,staff){
 
 function renderWeek(mon){
   const di=S.deptIdx;
-  const chiefs = combinedView ? getCombinedChiefs() : getChiefs(di);
+  const chiefs = combinedView ? getCombinedChiefs() : getEffectiveChiefs(di);
   const staff  = combinedView ? getCombinedStaff()  : getStaff(di);
   const dates=Array.from({length:7},(_,i)=>{const d=new Date(mon);d.setDate(d.getDate()+i);return d});
   let h=`<div class="table-wrap"><table>${renderTableHead(chiefs,staff)}<tbody>`;
@@ -590,7 +590,7 @@ function renderWeek(mon){
 function renderMonth(first){
   const di=S.deptIdx,year=first.getFullYear(),month=first.getMonth();
   const lastDay=new Date(year,month+1,0).getDate();
-  const chiefs = combinedView ? getCombinedChiefs() : getChiefs(di);
+  const chiefs = combinedView ? getCombinedChiefs() : getEffectiveChiefs(di);
   const staff  = combinedView ? getCombinedStaff()  : getStaff(di);
   let h=`<div class="table-wrap"><table>${renderTableHead(chiefs,staff)}<tbody>`;
   for(let day=1;day<=lastDay;day++){
@@ -608,7 +608,7 @@ function renderMonth(first){
 
 function renderDay(d){
   const di=S.deptIdx;
-  const chiefs = combinedView ? getCombinedChiefs() : getChiefs(di);
+  const chiefs = combinedView ? getCombinedChiefs() : getEffectiveChiefs(di);
   const staff  = combinedView ? getCombinedStaff()  : getStaff(di);
   const dk=dateKey(d);
   let h='';
@@ -1019,7 +1019,23 @@ function renderStaffTab(){
   h+=`<div class="modal-btns"><button class="btn primary" onclick="closeModal()">完了</button></div>`;
   document.getElementById('set-body').innerHTML=h;setTimeout(()=>document.getElementById('new-staff')?.focus(),100);
 }
-function getStableId(di){ const dept=SUPABASE_STORES[di]; return dept?(dept.store_id||dept.id):null; }
+function getEffectiveChiefs(di){
+  const defined = getChiefs(di);
+  const csched = getCsched(di);
+  // スケジュールデータから使われているchief_indexを抽出
+  const usedIdx = new Set();
+  Object.keys(csched).forEach(k => {
+    const parts = k.split('__');
+    if(parts.length >= 2) usedIdx.add(Number(parts[1]));
+  });
+  if(!usedIdx.size) return defined;
+  const maxIdx = Math.max(...usedIdx);
+  const result = [];
+  for(let i = 0; i <= maxIdx; i++){
+    result.push(defined[i] || {name: `チーフ${i+1}`, _placeholder: true});
+  }
+  return result;
+}
 async function addChief(){const n=document.getElementById('new-chief')?.value.trim();if(!n)return;const stableId=getStableId(S.deptIdx);if(!stableId)return;const newP={id:'sc_'+Date.now(),store_id:stableId,name:n,type:'chief',sort_order:(S.chiefs[`d${S.deptIdx}`]||[]).length};const res=await SB('schedule_staff',{method:'POST',body:JSON.stringify(newP)});if(res.ok){if(!S.chiefs[`d${S.deptIdx}`])S.chiefs[`d${S.deptIdx}`]=[];S.chiefs[`d${S.deptIdx}`].push(newP);render();renderChiefTab();document.getElementById('new-chief').value='';setStatus('保存しました','saved');}else{alert('保存に失敗しました');}}
 async function delChief(i){if(!confirm('削除しますか？'))return;const chiefs=S.chiefs[`d${S.deptIdx}`]||[];const p=chiefs[i];if(p&&p.id)await SB(`schedule_staff?id=eq.${encodeURIComponent(p.id)}`,{method:'DELETE'});chiefs.splice(i,1);render();renderChiefTab();}
 async function addStaff(){const n=document.getElementById('new-staff')?.value.trim();if(!n)return;const stableId=getStableId(S.deptIdx);if(!stableId)return;const newP={id:'sc_'+Date.now(),store_id:stableId,name:n,type:'staff',sort_order:(S.staff[`d${S.deptIdx}`]||[]).length};const res=await SB('schedule_staff',{method:'POST',body:JSON.stringify(newP)});if(res.ok){if(!S.staff[`d${S.deptIdx}`])S.staff[`d${S.deptIdx}`]=[];S.staff[`d${S.deptIdx}`].push(newP);render();renderStaffTab();document.getElementById('new-staff').value='';setStatus('保存しました','saved');}else{alert('保存に失敗しました');}}
