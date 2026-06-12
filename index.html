@@ -200,7 +200,8 @@ function getStoreColor(storeId) {
 }
 
 let S={view:'week',offset:0,deptIdx:0,stores:[],chiefs:{},staff:{},csched:{},ssched:{}};
-let SUPABASE_STORES = []; // Supabaseのstoresテーブルキャッシュ
+let SUPABASE_STORES = []; // schedule_deptsテーブルキャッシュ
+let SALES_STORES = [];    // 売上アプリのstoresテーブルキャッシュ（部署追加用）
 let CATS_DATA = {service:[], route:[]}; // catsテーブルキャッシュ
 
 function setStatus(msg,type=''){const el=document.getElementById('status-bar');el.textContent=msg;el.className='status-bar'+(type?' '+type:'')}
@@ -210,20 +211,28 @@ async function loadData(){
   try {
     setStatus('読み込み中...','saving');
 
-    // stores / cats / schedules / attendance を並行取得
     const [storesRes, catsRes, schedRes, attendRes] = await Promise.all([
-      SB('stores?select=*&order=created_at'),
+      SB('schedule_depts?select=*&order=sort_order,id'),
+      SB('stores?select=id,name,dept&order=created_at'),  // 売上アプリの部署リスト（追加選択用）
       SB('cats?select=*'),
       SB('schedules?select=*&order=date,chief_index'),
       SB('schedule_attendance?select=*')
     ]);
 
-    const stores = await storesRes.json();
+    const schedDepts = await storesRes.json();
+    const salesStores = await (await SB('stores?select=id,name,dept&order=created_at')).json().catch(()=>[]);
+    SALES_STORES = Array.isArray(salesStores) ? salesStores : [];
     const cats = await catsRes.json();
     const schedules = await schedRes.json();
     const attendances = await attendRes.json();
 
-    SUPABASE_STORES = stores || [];
+    // エラーチェック
+    if(!Array.isArray(schedDepts)){
+      document.getElementById('view-area').innerHTML=`<div style="padding:20px;color:red;font-size:13px;">⚠ schedule_depts読込エラー: ${JSON.stringify(schedDepts).slice(0,200)}</div>`;
+      setStatus('読込エラー','error');render();return;
+    }
+
+    SUPABASE_STORES = Array.isArray(schedDepts) ? schedDepts : [];
     if (cats && cats[0]) {
       CATS_DATA.service = cats[0].service || [];
       CATS_DATA.route = cats[0].route || [];
@@ -294,7 +303,9 @@ async function loadData(){
 
     setStatus('最終読込: '+new Date().toLocaleTimeString('ja-JP'),'saved');
   } catch(e) {
-    setStatus('オフラインで使用中','error');
+    console.error('loadData error:', e);
+    document.getElementById('view-area').innerHTML=`<div style="padding:20px;color:red;font-size:13px;">⚠ 読込エラー: ${e.message||e}<br>詳細はF12のConsoleを確認してください</div>`;
+    setStatus('読込エラー: '+e.message,'error');
   }
   render();
 }
@@ -356,13 +367,13 @@ async function deleteFromSupabase(supabase_id) {
 async function saveData(){
   try {
     setStatus('保存中...','saving');
-    // chiefs / staff を stores テーブルに保存
+    // chiefs / staff を schedule_depts テーブルに保存
     for (let i = 0; i < SUPABASE_STORES.length; i++) {
       const s = SUPABASE_STORES[i];
       const chiefs = S.chiefs[`d${i}`] || [];
       const staff  = S.staff[`d${i}`]  || [];
-      const r = await SB(`stores?id=eq.${encodeURIComponent(s.id)}`, {method:'PATCH', body: JSON.stringify({chiefs, staff})});
-      if (r.ok) { s.chiefs = chiefs; s.staff = staff; }
+      await SB(`schedule_depts?id=eq.${encodeURIComponent(s.id)}`, {method:'PATCH', body: JSON.stringify({chiefs, staff})});
+      s.chiefs = chiefs; s.staff = staff;
     }
     // 出勤データを schedule_attendance に保存（部署×月ごと）
     const months = [...new Set(Object.keys(S.ssched).map(k => k.split('__')[1]).filter(Boolean))];
@@ -601,7 +612,7 @@ function renderDay(d){
 
 function toggleStaff(dk,si){const ss=getSsched(S.deptIdx),key=`${dk}__${si}`,cur=ss[key]||'';ss[key]=cur===''?'出勤':cur==='出勤'?'休日':'';render();saveAttendance(S.deptIdx,dk);}
 async function saveAttendance(di, dk){
-  const sid=SUPABASE_STORES[di]?.id;if(!sid)return;
+  const deptId=SUPABASE_STORES[di]?.id;if(!deptId)return;
   const month=dk.slice(0,7);
   const dkPrefix=`d${di}`;
   const data={};
@@ -610,12 +621,12 @@ async function saveAttendance(di, dk){
       data[k.slice(dkPrefix.length+1)]=v;
     }
   });
-  const existRes=await SB(`schedule_attendance?store_id=eq.${encodeURIComponent(sid)}&month=eq.${encodeURIComponent(month)}`);
+  const existRes=await SB(`schedule_attendance?store_id=eq.${encodeURIComponent(deptId)}&month=eq.${encodeURIComponent(month)}`);
   const existing=await existRes.json();
   if(existing&&existing.length>0){
     await SB(`schedule_attendance?id=eq.${encodeURIComponent(existing[0].id)}`,{method:'PATCH',body:JSON.stringify({data})});
   } else {
-    await SB('schedule_attendance',{method:'POST',body:JSON.stringify({id:`att_${sid}_${month}`,store_id:sid,month,data})});
+    await SB('schedule_attendance',{method:'POST',body:JSON.stringify({id:`att_${deptId}_${month}`,store_id:deptId,month,data})});
   }
 }
 
@@ -866,15 +877,86 @@ function setTab(t){
   if(t==='store')renderStoreTab();else if(t==='chief')renderChiefTab();else renderStaffTab();
 }
 function renderStoreTab(){
-  let h='';
-  S.stores.forEach((s,si)=>{
-    h+=`<div class="store-block"><div class="inline-row"><input type="text" value="${s.name}" style="flex:1" onchange="S.stores[${si}].name=this.value;render()" /><button class="btn danger" style="padding:8px;min-height:44px" onclick="delStore(${si})"><i class="ti ti-trash"></i></button></div>`;
-    s.depts.forEach((d,di)=>h+=`<div class="inline-row" style="padding-left:8px"><input type="text" value="${d}" style="flex:1;font-size:14px" onchange="S.stores[${si}].depts[${di}]=this.value;render()" /><button class="btn danger" style="padding:8px;min-height:44px" onclick="delDept(${si},${di})"><i class="ti ti-x"></i></button></div>`);
-    h+=`<button class="btn" style="font-size:13px;padding:8px 12px;margin-left:8px;margin-top:4px;min-height:44px" onclick="addDept(${si})"><i class="ti ti-plus"></i> 部署追加</button></div>`;
+  const depts = getDepts();
+  let h = '';
+  if(!depts.length){
+    h += '<p style="color:#bbb;font-size:13px;margin-bottom:12px;">まだ部署が登録されていません。下のボタンから追加してください。</p>';
+  } else {
+    depts.forEach((d,i) => {
+      const s = SUPABASE_STORES[i];
+      const linked = s && s.store_id ? '<span style="font-size:10px;background:rgba(47,116,208,.15);color:#3a7bd5;padding:2px 7px;border-radius:4px;margin-left:6px;">売上連携</span>' : '<span style="font-size:10px;background:rgba(136,146,164,.15);color:#888;padding:2px 7px;border-radius:4px;margin-left:6px;">専用</span>';
+      h += `<div class="store-block" style="margin-bottom:8px;">
+        <div class="inline-row">
+          <input type="text" value="${s.name}" style="flex:1" onchange="renameSchedDept(${i},this.value)" />
+          ${linked}
+          <button class="btn danger" style="padding:8px;min-height:44px" onclick="delSchedDept(${i})"><i class="ti ti-trash"></i></button>
+        </div>
+      </div>`;
+    });
+  }
+  // 追加ボタン2種
+  h += `<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+    <button class="btn" style="flex:1;min-height:48px;font-size:13px;justify-content:center;" onclick="openAddSchedDeptFromSales()"><i class="ti ti-building-store"></i> 売上アプリの部署から追加</button>
+    <button class="btn" style="flex:1;min-height:48px;font-size:13px;justify-content:center;" onclick="addSchedDeptNew()"><i class="ti ti-plus"></i> スケジュール専用で追加</button>
+  </div>`;
+  h += `<div class="modal-btns"><button class="btn primary" onclick="closeModal()">完了</button></div>`;
+  document.getElementById('set-body').innerHTML = h;
+}
+function openAddSchedDeptFromSales(){
+  if(!SALES_STORES.length){alert('売上アプリの部署が読み込まれていません');return;}
+  const already = SUPABASE_STORES.map(s=>s.store_id).filter(Boolean);
+  const available = SALES_STORES.filter(s=>!already.includes(s.id));
+  if(!available.length){alert('追加できる部署がありません（全部追加済みか、売上アプリに部署が登録されていません）');return;}
+  document.getElementById('set-body').innerHTML=`
+    <div style="margin-bottom:12px;font-size:13px;color:#888;">売上アプリの部署を選んでください</div>
+    <select id="sales-dept-sel" class="form-input" style="width:100%;margin-bottom:12px;">
+      ${available.map(s=>`<option value="${s.id}">${s.name}${s.dept?' '+s.dept:''}</option>`).join('')}
+    </select>
+    <div class="modal-btns">
+      <button class="btn" onclick="setTab('store')">戻る</button>
+      <button class="btn primary" onclick="confirmAddFromSales()">追加</button>
+    </div>`;
+}
+async function confirmAddFromSales(){
+  const storeId = document.getElementById('sales-dept-sel').value;
+  const s = SALES_STORES.find(x=>x.id===storeId);
+  if(!s)return;
+  const name = s.name+(s.dept?' '+s.dept:'');
+  const newDept = {id:'sd_'+Date.now(), store_id: storeId, name, chiefs:[], staff:[], sort_order: SUPABASE_STORES.length};
+  const res = await SB('schedule_depts', {method:'POST', body: JSON.stringify(newDept)});
+  if(res.ok){SUPABASE_STORES.push(newDept);S.chiefs[`d${SUPABASE_STORES.length-1}`]=[];S.staff[`d${SUPABASE_STORES.length-1}`]=[];render();setTab('store');toast('追加しました');}
+  else{alert('追加に失敗しました');}
+}
+async function addSchedDeptNew(){
+  const name = prompt('部署名を入力してください（例: スケジュール専用チーム）');
+  if(!name||!name.trim())return;
+  const newDept = {id:'sd_'+Date.now(), store_id: null, name:name.trim(), chiefs:[], staff:[], sort_order: SUPABASE_STORES.length};
+  const res = await SB('schedule_depts', {method:'POST', body: JSON.stringify(newDept)});
+  if(res.ok){SUPABASE_STORES.push(newDept);S.chiefs[`d${SUPABASE_STORES.length-1}`]=[];S.staff[`d${SUPABASE_STORES.length-1}`]=[];render();setTab('store');toast('追加しました');}
+  else{alert('追加に失敗しました');}
+}
+async function renameSchedDept(i, newName){
+  if(!SUPABASE_STORES[i])return;
+  SUPABASE_STORES[i].name=newName;
+  S.stores[i]={...S.stores[i],name:newName};
+  await SB(`schedule_depts?id=eq.${encodeURIComponent(SUPABASE_STORES[i].id)}`,{method:'PATCH',body:JSON.stringify({name:newName})});
+  render();
+}
+async function delSchedDept(i){
+  if(!confirm('この部署を削除しますか？チーフ・スタッフ情報も削除されます。\n（この部署の予定データはSupabaseに残ります）'))return;
+  const s=SUPABASE_STORES[i];
+  await SB(`schedule_depts?id=eq.${encodeURIComponent(s.id)}`,{method:'DELETE'});
+  SUPABASE_STORES.splice(i,1);
+  // インデックスを詰める
+  const newChiefs={},newStaff={},newCsched={};
+  SUPABASE_STORES.forEach((_,ni)=>{
+    newChiefs[`d${ni}`]=S.chiefs[`d${ni<i?ni:ni+1}`]||[];
+    newStaff[`d${ni}`]=S.staff[`d${ni<i?ni:ni+1}`]||[];
+    newCsched[`d${ni}`]=S.csched[`d${ni<i?ni:ni+1}`]||{};
   });
-  h+=`<button class="btn primary" style="width:100%;justify-content:center;margin-top:8px;min-height:48px;font-size:14px" onclick="addStore()"><i class="ti ti-plus"></i> 店舗追加</button>`;
-  h+=`<div class="modal-btns"><button class="btn primary" onclick="closeModal()">完了</button></div>`;
-  document.getElementById('set-body').innerHTML=h;
+  S.chiefs=newChiefs;S.staff=newStaff;S.csched=newCsched;
+  if(S.deptIdx>=SUPABASE_STORES.length)S.deptIdx=0;
+  render();setTab('store');toast('削除しました');
 }
 function renderChiefTab(){
   const di=S.deptIdx,depts=getDepts(),chiefs=getChiefs(di);
@@ -892,10 +974,7 @@ function renderStaffTab(){
   h+=`<div class="modal-btns"><button class="btn primary" onclick="closeModal()">完了</button></div>`;
   document.getElementById('set-body').innerHTML=h;setTimeout(()=>document.getElementById('new-staff')?.focus(),100);
 }
-function addStore(){S.stores.push({name:'新しい店舗',depts:['〇事業部']});renderStoreTab()}
-function delStore(si){if(!confirm('削除しますか？'))return;S.stores.splice(si,1);render();renderStoreTab()}
-function addDept(si){S.stores[si].depts.push('新しい部署');render();renderStoreTab()}
-function delDept(si,di){if(!confirm('削除しますか？'))return;S.stores[si].depts.splice(di,1);render();renderStoreTab()}
+// 旧store管理関数は renderStoreTab で置換済み
 function addChief(){const n=document.getElementById('new-chief')?.value.trim();if(!n)return;getChiefs(S.deptIdx).push({name:n});render();renderChiefTab();saveData();}
 function delChief(i){if(!confirm('削除しますか？'))return;getChiefs(S.deptIdx).splice(i,1);render();renderChiefTab();saveData();}
 function addStaff(){const n=document.getElementById('new-staff')?.value.trim();if(!n)return;getStaff(S.deptIdx).push({name:n});render();renderStaffTab();saveData();}
