@@ -264,7 +264,7 @@ async function loadData(){
       schedules.forEach(row => {
         const dk = row.date;
         const mi = row.chief_index;
-        const di = row.dept ? getDeptIndexByDept(row.dept) : 0;
+        const di = row.store_id ? getDeptIndexByDept(row.store_id) : (row.dept ? getDeptIndexByDept(row.dept) : 0);
         const dkey_str = `d${di}`;
         if (!S.csched[dkey_str]) S.csched[dkey_str] = {};
         const key = `${dk}__${mi}`;
