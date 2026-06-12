@@ -211,19 +211,19 @@ async function loadData(){
   try {
     setStatus('読み込み中...','saving');
 
-    const [storesRes, catsRes, schedRes, attendRes] = await Promise.all([
+    const [schedDeptsRes, salesStoresRes, catsRes, schedRes, attendRes] = await Promise.all([
       SB('schedule_depts?select=*&order=sort_order,id'),
-      SB('stores?select=id,name,dept&order=created_at'),  // 売上アプリの部署リスト（追加選択用）
+      SB('stores?select=id,name,dept&order=created_at'),
       SB('cats?select=*'),
       SB('schedules?select=*&order=date,chief_index'),
       SB('schedule_attendance?select=*')
     ]);
 
-    const schedDepts = await storesRes.json();
-    const salesStores = await (await SB('stores?select=id,name,dept&order=created_at')).json().catch(()=>[]);
+    const schedDepts  = await schedDeptsRes.json();
+    const salesStores = await salesStoresRes.json().catch(()=>[]);
     SALES_STORES = Array.isArray(salesStores) ? salesStores : [];
-    const cats = await catsRes.json();
-    const schedules = await schedRes.json();
+    const cats        = await catsRes.json();
+    const schedules   = await schedRes.json();
     const attendances = await attendRes.json();
 
     // エラーチェック
@@ -928,7 +928,7 @@ async function confirmAddFromSales(){
   const name = s.name+(s.dept?' '+s.dept:'');
   const newDept = {id:'sd_'+Date.now(), store_id: storeId, name, chiefs:[], staff:[], sort_order: SUPABASE_STORES.length};
   const res = await SB('schedule_depts', {method:'POST', body: JSON.stringify(newDept)});
-  if(res.ok){SUPABASE_STORES.push(newDept);S.chiefs[`d${SUPABASE_STORES.length-1}`]=[];S.staff[`d${SUPABASE_STORES.length-1}`]=[];render();setTab('store');toast('追加しました');}
+  if(res.ok){await loadData();setTab('store');toast('追加しました。予定も再読み込みしました');}
   else{alert('追加に失敗しました');}
 }
 async function addSchedDeptNew(){
@@ -936,7 +936,7 @@ async function addSchedDeptNew(){
   if(!name||!name.trim())return;
   const newDept = {id:'sd_'+Date.now(), store_id: null, name:name.trim(), chiefs:[], staff:[], sort_order: SUPABASE_STORES.length};
   const res = await SB('schedule_depts', {method:'POST', body: JSON.stringify(newDept)});
-  if(res.ok){SUPABASE_STORES.push(newDept);S.chiefs[`d${SUPABASE_STORES.length-1}`]=[];S.staff[`d${SUPABASE_STORES.length-1}`]=[];render();setTab('store');toast('追加しました');}
+  if(res.ok){await loadData();setTab('store');toast('追加しました。予定も再読み込みしました');}
   else{alert('追加に失敗しました');}
 }
 async function renameSchedDept(i, newName){
