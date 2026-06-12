@@ -1009,6 +1009,7 @@ function renderStaffTab(){
   document.getElementById('set-body').innerHTML=h;setTimeout(()=>document.getElementById('new-staff')?.focus(),100);
 }
 
+function getStableId(di){ const dept=SUPABASE_STORES[di]; return dept?(dept.store_id||dept.id):null; }
 async function addChief(){
   const n=document.getElementById('new-chief')?.value.trim();
   if(!n){alert('名前を入力してください');return;}
