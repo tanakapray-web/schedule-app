@@ -126,7 +126,6 @@ th,td{border:0.5px solid #e0ded8}
   <div class="topbar">
     <h2 id="page-title">スケジュール</h2>
     <select id="dept-sel" onchange="changeDept()" style="width:auto;max-width:160px;font-size:13px;padding:7px 28px 7px 10px"></select>
-    <button id="combined-btn" class="btn" onclick="toggleCombined()" style="font-size:12px;padding:6px 12px;white-space:nowrap;">合同表示</button>
     <button class="btn" onclick="openSettings()"><i class="ti ti-settings"></i> <span class="btn-label">管理</span></button>
     <button class="btn save-btn" onclick="saveData()"><i class="ti ti-cloud-upload"></i> <span class="btn-label">保存</span></button>
     <button class="btn" onclick="exportCSV()"><i class="ti ti-download"></i> <span class="btn-label">出力</span></button>
@@ -212,12 +211,13 @@ async function loadData(){
   try {
     setStatus('読み込み中...','saving');
 
-    const [schedDeptsRes, salesStoresRes, catsRes, schedRes, attendRes] = await Promise.all([
+    const [schedDeptsRes, salesStoresRes, catsRes, schedRes, attendRes, staffRes] = await Promise.all([
       SB('schedule_depts?select=*&order=sort_order,id'),
       SB('stores?select=id,name,dept&order=created_at'),
       SB('cats?select=*'),
       SB('schedules?select=*&order=date,chief_index'),
-      SB('schedule_attendance?select=*')
+      SB('schedule_attendance?select=*'),
+      SB('schedule_staff?select=*&order=sort_order,id')
     ]);
 
     const schedDepts  = await schedDeptsRes.json();
@@ -226,6 +226,7 @@ async function loadData(){
     const cats        = await catsRes.json();
     const schedules   = await schedRes.json();
     const attendances = await attendRes.json();
+    const allStaff    = await staffRes.json().catch(()=>[]);
 
     // エラーチェック
     if(!Array.isArray(schedDepts)){
@@ -246,20 +247,23 @@ async function loadData(){
       depts: ['']
     }));
 
-    // chiefs / staff を stores から読み込む（dkeyはインデックスベース）
+    // chiefs / staff を schedule_staff テーブルから読み込む（部署削除でも消えない）
     S.chiefs = {};
     S.staff = {};
-    SUPABASE_STORES.forEach((s, i) => {
+    const staffArr = Array.isArray(allStaff) ? allStaff : [];
+    SUPABASE_STORES.forEach((dept, i) => {
+      const stableId = dept.store_id || dept.id; // 売上アプリのstore_id（安定）を優先
       const dk = `d${i}`;
-      S.chiefs[dk] = Array.isArray(s.chiefs) ? s.chiefs : [];
-      S.staff[dk] = Array.isArray(s.staff) ? s.staff : [];
+      S.chiefs[dk] = staffArr.filter(p => p.store_id === stableId && p.type === 'chief').sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));
+      S.staff[dk]  = staffArr.filter(p => p.store_id === stableId && p.type === 'staff').sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));
     });
 
     // 出勤データを schedule_attendance から読み込む
     S.ssched = {};
     if (attendances && attendances.length) {
       attendances.forEach(rec => {
-        const si = SUPABASE_STORES.findIndex(s => s.id === rec.store_id);
+        // stableId（売上store_idまたはschedule_depts.id）でマッチ
+        const si = SUPABASE_STORES.findIndex(s => (s.store_id||s.id) === rec.store_id);
         if (si < 0 || !rec.data) return;
         const dk = `d${si}`;
         Object.entries(rec.data).forEach(([k, v]) => {
@@ -372,13 +376,24 @@ async function deleteFromSupabase(supabase_id) {
 async function saveData(){
   try {
     setStatus('保存中...','saving');
-    // chiefs / staff を schedule_depts テーブルに保存
+    // chiefs / staff を schedule_staff テーブルに保存（部署を消しても残る）
     for (let i = 0; i < SUPABASE_STORES.length; i++) {
-      const s = SUPABASE_STORES[i];
-      const chiefs = S.chiefs[`d${i}`] || [];
-      const staff  = S.staff[`d${i}`]  || [];
-      await SB(`schedule_depts?id=eq.${encodeURIComponent(s.id)}`, {method:'PATCH', body: JSON.stringify({chiefs, staff})});
-      s.chiefs = chiefs; s.staff = staff;
+      const dept = SUPABASE_STORES[i];
+      const stableId = dept.store_id || dept.id;
+      const allP = [
+        ...(S.chiefs[`d${i}`]||[]).map((c,ci)=>({...c,store_id:stableId,type:'chief',sort_order:ci})),
+        ...(S.staff[`d${i}`] ||[]).map((p,pi)=>({...p,store_id:stableId,type:'staff', sort_order:pi}))
+      ];
+      for(const p of allP){
+        if(!p.id) p.id = 'sc_'+Date.now()+'_'+Math.random().toString(36).slice(2);
+        const chk = await SB(`schedule_staff?id=eq.${encodeURIComponent(p.id)}`);
+        const existing = await chk.json();
+        if(existing&&existing.length>0){
+          await SB(`schedule_staff?id=eq.${encodeURIComponent(p.id)}`,{method:'PATCH',body:JSON.stringify({name:p.name,sort_order:p.sort_order})});
+        } else {
+          await SB('schedule_staff',{method:'POST',body:JSON.stringify(p)});
+        }
+      }
     }
     // 出勤データを schedule_attendance に保存（部署×月ごと）
     const months = [...new Set(Object.keys(S.ssched).map(k => k.split('__')[1]).filter(Boolean))];
@@ -575,51 +590,65 @@ function renderWeek(mon){
 function renderMonth(first){
   const di=S.deptIdx,year=first.getFullYear(),month=first.getMonth();
   const lastDay=new Date(year,month+1,0).getDate();
-  const chiefs=getChiefs(di),staff=getStaff(di),csched=getCsched(di),ssched=getSsched(di);
+  const chiefs = combinedView ? getCombinedChiefs() : getChiefs(di);
+  const staff  = combinedView ? getCombinedStaff()  : getStaff(di);
   let h=`<div class="table-wrap"><table>${renderTableHead(chiefs,staff)}<tbody>`;
   for(let day=1;day<=lastDay;day++){
     const d=new Date(year,month,day),dk=dateKey(d),wk=isWeekend(d),tod=isToday(d);
     h+=`<tr><td class="td-date${wk?' weekend':''}${tod?' today-c':''}">${day}<br><span style="font-size:10px">${fmtDow(d)}</span></td>`;
-    h+=makeChiefCells(dk,di,wk,chiefs,csched)+makeStaffCells(dk,di,wk,staff,ssched)+'</tr>';}
+    if(combinedView){
+      h+=chiefs.map(c=>makeChiefCells(dk,c._di,wk,[c],getCsched(c._di))).join('');
+      h+=staff.map(s=>makeStaffCells(dk,s._di,wk,[s],getSsched(s._di))).join('');
+    } else {
+      h+=makeChiefCells(dk,di,wk,chiefs,getCsched(di))+makeStaffCells(dk,di,wk,staff,getSsched(di));
+    }
+    h+='</tr>';}
   document.getElementById('view-area').innerHTML=h+'</tbody></table></div>';
 }
 
 function renderDay(d){
-  const di=S.deptIdx,chiefs=getChiefs(di),staff=getStaff(di),csched=getCsched(di),ssched=getSsched(di),dk=dateKey(d);
+  const di=S.deptIdx;
+  const chiefs = combinedView ? getCombinedChiefs() : getChiefs(di);
+  const staff  = combinedView ? getCombinedStaff()  : getStaff(di);
+  const dk=dateKey(d);
   let h='';
   if(chiefs.length){
     h+='<div class="day-section-label">チーフ</div>';
-    chiefs.forEach((m,mi)=>{const entries=sortE(csched[`${dk}__${mi}`]||[]);
-      h+=`<div class="day-chief-row"><div class="day-chief-head"><div class="avatar" style="display:inline-flex;width:28px;height:28px;background:${CAVS[mi%8]};font-size:12px">${m.name[0]}</div><span style="flex:1;font-size:15px">${m.name}</span><button class="btn primary" style="padding:8px 12px;font-size:13px;min-height:40px" onclick="openAdd('${dk}',${mi})"><i class="ti ti-plus"></i> 追加</button></div><div class="day-entries-wrap">`;
+    chiefs.forEach((m,mi)=>{
+      const cdi = combinedView ? m._di : di;
+      const cmi = combinedView ? m._ci : mi;
+      const entries=sortE((getCsched(cdi)[`${dk}__${cmi}`])||[]);
+      h+=`<div class="day-chief-row"><div class="day-chief-head"><div class="avatar" style="display:inline-flex;width:28px;height:28px;background:${CAVS[mi%8]};font-size:12px">${m.name[0]}</div><span style="flex:1;font-size:15px">${m.name}</span><button class="btn primary" style="padding:8px 12px;font-size:13px;min-height:40px" onclick="openAdd('${dk}',${cmi})"><i class="ti ti-plus"></i> 追加</button></div><div class="day-entries-wrap">`;
       if(!entries.length)h+=`<span style="font-size:13px;color:#bbb">予定なし</span>`;
       else entries.forEach((e,ei)=>{
         const cidx=getEntryColor(e),c=ECOLORS[cidx],time=e.start?(e.end?`${e.start}〜${e.end}`:`${e.start}〜`):'';
         const isRep=e.repeatId?'repeating':'';
-        const storeName = e.store_id ? (SUPABASE_STORES.find(s=>s.id===e.store_id)?.name||'') : '';
+        const storeName = e.store_id ? (SALES_STORES.find(s=>s.id===e.store_id)?.name||(SUPABASE_STORES.find(s=>s.id===e.store_id||s.store_id===e.store_id)?.name)||'') : '';
         const stIcon=e.schedule_type?({'service':'🔧','estimate':'📋','other':'📅'}[e.schedule_type]||''):'';
-        h+=`<div class="day-entry-card ${isRep}" style="background:${c.bg};color:${c.tc}" onclick="openEdit('${dk}',${mi},${ei})">`;
-        if(time)h+=`<div style="font-size:11px;opacity:.75;margin-bottom:2px">${time}</div>`;
-        h+=`<div style="font-weight:600;font-size:13px">${stIcon?stIcon+' ':''}${e.name}</div>`;
+        h+=`<div class="day-entry-card ${isRep}" style="background:${c.bg};color:${c.tc}" onclick="openEdit('${dk}',${cmi},${ei})">`;
+        if(storeName)h+=`<div style="font-size:10px;font-weight:600;opacity:.8;margin-bottom:2px;">${storeName}</div>`;
+        if(time)h+=`<div style="font-size:12px;opacity:.8">${time}</div>`;
+        h+=`<div style="font-weight:600">${stIcon} ${e.name||''}</div>`;
         if(e.note)h+=`<div style="font-size:11px;margin-top:4px;opacity:.8">${e.note}</div>`;
-        if(storeName||e.category||e.amount){
-          h+=`<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:3px">`;
-          if(storeName)h+=`<span class="sales-badge">${storeName}</span>`;
-          if(e.category)h+=`<span class="sales-badge">${e.category}</span>`;
-          if(e.amount)h+=`<span class="sales-badge">¥${Number(e.amount).toLocaleString()}</span>`;
-          h+=`</div>`;
-        }
-        if(e.staff_names&&e.staff_names.length){
-          h+=`<div style="font-size:11px;margin-top:4px;opacity:.8">👥 ${e.staff_names.join('、')}</div>`;
-        }
-        if(e.repeatId)h+=`<div class="repeat-badge">🔁 繰り返し</div>`;
-        h+='</div>';});
-      h+='</div></div>';});
+        if(e.staff_names&&e.staff_names.length)h+=`<div style="font-size:11px;margin-top:4px;opacity:.8">👥 ${e.staff_names.join('、')}</div>`;
+        if(e.amount)h+=`<div style="font-size:11px;margin-top:4px;opacity:.8">¥${Number(e.amount).toLocaleString()}</div>`;
+        h+=`</div>`;
+      });
+      h+='</div></div>';
+    });
   }
   if(staff.length){
-    h+='<div class="day-section-label">スタッフ出勤</div><div class="staff-day-card">';
-    staff.forEach((s,si)=>{const v=ssched[`${dk}__${si}`]||'';
-      h+=`<div class="staff-day-row" onclick="toggleStaff('${dk}',${si})"><span style="flex:1;font-size:15px">${s.name}</span>${v==='出勤'?`<span class="staff-badge badge-on" style="padding:5px 12px;font-size:13px">出勤</span>`:v==='休日'?`<span class="staff-badge badge-off" style="padding:5px 12px;font-size:13px">休日</span>`:`<span style="font-size:13px;color:#bbb">未設定</span>`}<i class="ti ti-chevron-right" style="color:#ccc;font-size:16px"></i></div>`;});
-    h+='</div>';
+    h+='<div class="day-section-label" style="margin-top:1rem">スタッフ出勤</div>';
+    staff.forEach((sv,si)=>{
+      const sdi = combinedView ? sv._di : di;
+      const ssi = combinedView ? sv._si : si;
+      const ss = getSsched(sdi);
+      const today_dk = dateKey(d);
+      const val = ss[`${today_dk}__${ssi}`]||'';
+      const colors = {出勤:'#d4edda',休日:'#f8d7da','':'#f8f9fa'};
+      const labels = {出勤:'出勤',休日:'休日','':'―'};
+      h+=`<div class="day-staff-row" onclick="toggleStaff('${today_dk}',${ssi})" style="background:${colors[val]||'#f8f9fa'};border-radius:8px;padding:10px 14px;margin-bottom:6px;cursor:pointer;display:flex;align-items:center;gap:10px"><span style="flex:1;font-size:14px">${sv.name}</span><span style="font-size:13px;font-weight:600">${labels[val]||'―'}</span></div>`;
+    });
   }
   if(!chiefs.length&&!staff.length)h='<div style="text-align:center;padding:3rem;color:#bbb;font-size:14px">管理画面からチーフ・スタッフを追加してください</div>';
   document.getElementById('view-area').innerHTML=h;
@@ -627,7 +656,8 @@ function renderDay(d){
 
 function toggleStaff(dk,si){const ss=getSsched(S.deptIdx),key=`${dk}__${si}`,cur=ss[key]||'';ss[key]=cur===''?'出勤':cur==='出勤'?'休日':'';render();saveAttendance(S.deptIdx,dk);}
 async function saveAttendance(di, dk){
-  const deptId=SUPABASE_STORES[di]?.id;if(!deptId)return;
+  const dept=SUPABASE_STORES[di];if(!dept)return;
+  const stableId=dept.store_id||dept.id; // 売上アプリのstore_id（安定）を優先
   const month=dk.slice(0,7);
   const dkPrefix=`d${di}`;
   const data={};
@@ -636,12 +666,12 @@ async function saveAttendance(di, dk){
       data[k.slice(dkPrefix.length+1)]=v;
     }
   });
-  const existRes=await SB(`schedule_attendance?store_id=eq.${encodeURIComponent(deptId)}&month=eq.${encodeURIComponent(month)}`);
+  const existRes=await SB(`schedule_attendance?store_id=eq.${encodeURIComponent(stableId)}&month=eq.${encodeURIComponent(month)}`);
   const existing=await existRes.json();
   if(existing&&existing.length>0){
     await SB(`schedule_attendance?id=eq.${encodeURIComponent(existing[0].id)}`,{method:'PATCH',body:JSON.stringify({data})});
   } else {
-    await SB('schedule_attendance',{method:'POST',body:JSON.stringify({id:`att_${deptId}_${month}`,store_id:deptId,month,data})});
+    await SB('schedule_attendance',{method:'POST',body:JSON.stringify({id:`att_${stableId}_${month}`,store_id:stableId,month,data})});
   }
 }
 
@@ -989,7 +1019,11 @@ function renderStaffTab(){
   h+=`<div class="modal-btns"><button class="btn primary" onclick="closeModal()">完了</button></div>`;
   document.getElementById('set-body').innerHTML=h;setTimeout(()=>document.getElementById('new-staff')?.focus(),100);
 }
-// 旧store管理関数は renderStoreTab で置換済み
+function getStableId(di){ const dept=SUPABASE_STORES[di]; return dept?(dept.store_id||dept.id):null; }
+async function addChief(){const n=document.getElementById('new-chief')?.value.trim();if(!n)return;const stableId=getStableId(S.deptIdx);if(!stableId)return;const newP={id:'sc_'+Date.now(),store_id:stableId,name:n,type:'chief',sort_order:(S.chiefs[`d${S.deptIdx}`]||[]).length};const res=await SB('schedule_staff',{method:'POST',body:JSON.stringify(newP)});if(res.ok){if(!S.chiefs[`d${S.deptIdx}`])S.chiefs[`d${S.deptIdx}`]=[];S.chiefs[`d${S.deptIdx}`].push(newP);render();renderChiefTab();document.getElementById('new-chief').value='';setStatus('保存しました','saved');}else{alert('保存に失敗しました');}}
+async function delChief(i){if(!confirm('削除しますか？'))return;const chiefs=S.chiefs[`d${S.deptIdx}`]||[];const p=chiefs[i];if(p&&p.id)await SB(`schedule_staff?id=eq.${encodeURIComponent(p.id)}`,{method:'DELETE'});chiefs.splice(i,1);render();renderChiefTab();}
+async function addStaff(){const n=document.getElementById('new-staff')?.value.trim();if(!n)return;const stableId=getStableId(S.deptIdx);if(!stableId)return;const newP={id:'sc_'+Date.now(),store_id:stableId,name:n,type:'staff',sort_order:(S.staff[`d${S.deptIdx}`]||[]).length};const res=await SB('schedule_staff',{method:'POST',body:JSON.stringify(newP)});if(res.ok){if(!S.staff[`d${S.deptIdx}`])S.staff[`d${S.deptIdx}`]=[];S.staff[`d${S.deptIdx}`].push(newP);render();renderStaffTab();document.getElementById('new-staff').value='';setStatus('保存しました','saved');}else{alert('保存に失敗しました');}}
+async function delStaff(i){if(!confirm('削除しますか？'))return;const staff=S.staff[`d${S.deptIdx}`]||[];const p=staff[i];if(p&&p.id)await SB(`schedule_staff?id=eq.${encodeURIComponent(p.id)}`,{method:'DELETE'});staff.splice(i,1);render();renderStaffTab();}
 function addChief(){const n=document.getElementById('new-chief')?.value.trim();if(!n)return;getChiefs(S.deptIdx).push({name:n});render();renderChiefTab();saveData();}
 function delChief(i){if(!confirm('削除しますか？'))return;getChiefs(S.deptIdx).splice(i,1);render();renderChiefTab();saveData();}
 function addStaff(){const n=document.getElementById('new-staff')?.value.trim();if(!n)return;getStaff(S.deptIdx).push({name:n});render();renderStaffTab();saveData();}
