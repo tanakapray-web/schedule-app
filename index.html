@@ -349,12 +349,10 @@ async function saveToSupabase(entry, dk, mi) {
   const storeId = entry.store_id || null;
   const chiefName = getChiefs(S.deptIdx)[mi]?.name || entry.chief_name || '';
   const deptId = SUPABASE_STORES[S.deptIdx]?.id || '';
-  const record = {
+  const baseRecord = {
     id: entry.supabase_id || `${dept?.label||''}__${dk}__${mi}__${Date.now()}`,
     date: dk,
     chief_index: mi,
-    chief_name: chiefName,
-    schedule_dept_id: deptId,
     store_id: storeId,
     dept: dept?.label || '',
     name: entry.name,
@@ -369,13 +367,22 @@ async function saveToSupabase(entry, dk, mi) {
     schedule_type: entry.schedule_type || 'service',
     staff_names: Array.isArray(entry.staff_names) ? entry.staff_names : [],
   };
+  // 新しい列は別途追加（エラーが出ても基本データは保存できるよう分離）
+  const extRecord = {...baseRecord, chief_name: chiefName, schedule_dept_id: deptId};
   try {
     setStatus('保存中...','saving');
     let _res;
     if (entry.supabase_id) {
-      _res = await SB(`schedules?id=eq.${encodeURIComponent(entry.supabase_id)}`, {method:'PATCH', body: JSON.stringify(record)});
+      _res = await SB(`schedules?id=eq.${encodeURIComponent(entry.supabase_id)}`, {method:'PATCH', body: JSON.stringify(extRecord)});
+      // 新列でエラーが出た場合は基本データだけ保存
+      if (!_res.ok) {
+        _res = await SB(`schedules?id=eq.${encodeURIComponent(entry.supabase_id)}`, {method:'PATCH', body: JSON.stringify(baseRecord)});
+      }
     } else {
-      _res = await SB('schedules', {method:'POST', body: JSON.stringify(record)});
+      _res = await SB('schedules', {method:'POST', body: JSON.stringify(extRecord)});
+      if (!_res.ok) {
+        _res = await SB('schedules', {method:'POST', body: JSON.stringify(baseRecord)});
+      }
     }
     const _txt = await _res.text();
     if (!_res.ok) { alert('保存に失敗しました:\n' + _res.status + ' ' + _txt); throw new Error('save failed: ' + _txt); }
@@ -760,10 +767,13 @@ function toggleRepeatEnd(){
 function openEdit(dk,mi,ei){
   const sched=getCsched(S.deptIdx),entries=sched[`${dk}__${mi}`]||[],sorted=sortE(entries),e=sorted[ei];
   if(!e)return;const origIdx=entries.indexOf(e);editCtx={dk,mi,origIdx};
+  const currentColor=e.color||0;
   document.getElementById('modal-box').innerHTML=mHTML('予定を編集',`
     <div class="field"><label>現場名</label><input type="text" id="f-name" value="${e.name}" autocomplete="off" /></div>
     <div class="row2"><div class="field"><label>開始</label>${timePickerHTML('f-start',e.start||'')}</div><div class="field"><label>終了</label>${timePickerHTML('f-end',e.end||'')}</div></div>
     <div class="field"><label>備考</label><textarea id="f-note">${e.note||''}</textarea></div>
+    <div class="field"><label>色</label><div class="color-row">${colorSwatchHTML(currentColor)}</div></div>
+    <input type="hidden" id="f-color" value="${currentColor}" />
     <div class="field"><label>予定区分</label>
       <div style="display:flex;gap:8px;margin-top:4px">
         <label style="display:flex;align-items:center;gap:4px;font-size:14px;cursor:pointer"><input type="radio" name="f-stype" value="service" ${(!e.schedule_type||e.schedule_type==='service')?'checked':''}> 🔧 サービス</label>
@@ -861,15 +871,18 @@ function saveEntry(){
 }
 
 function updateEntry(){
-  if(!editCtx)return;const{dk,mi,origIdx}=editCtx;const name=document.getElementById('f-name').value.trim();if(!name)return;
+  if(!editCtx)return;
+  const{dk,mi,origIdx}=editCtx;
+  const name=document.getElementById('f-name').value.trim();if(!name)return;
   const start=getTime('f-start'),end=getTime('f-end'),note=document.getElementById('f-note').value.trim();
   const sales=getSalesFields();
   const staff_names=getSelectedStaff();
-  const color = parseInt(document.getElementById('f-color')?.value||0);
-  const e=getCsched(S.deptIdx)[`${dk}__${mi}`][origIdx];
+  const color=parseInt(document.getElementById('f-color')?.value||0);
+  const e=getCsched(S.deptIdx)[`${dk}__${mi}`]?.[origIdx];
+  if(!e){alert('更新対象が見つかりません');return;}
   const updated={...e,name,start,end,note,color,...sales,staff_names};
   getCsched(S.deptIdx)[`${dk}__${mi}`][origIdx]=updated;
-  saveToSupabase(updated, dk, mi);
+  saveToSupabase(updated,dk,mi);
   closeModal();render();
 }
 
