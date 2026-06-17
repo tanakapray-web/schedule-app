@@ -343,12 +343,13 @@ function getDeptIndexByDept(deptOrId) {
 }
 
 // ========== Supabaseに保存 ==========
-async function saveToSupabase(entry, dk, mi) {
+async function saveToSupabase(entry, dk, mi, di) {
+  if(di===undefined) di=S.deptIdx;
   const depts = getDepts();
-  const dept = depts[S.deptIdx];
+  const dept = depts[di];
   const storeId = entry.store_id || null;
-  const chiefName = getChiefs(S.deptIdx)[mi]?.name || entry.chief_name || '';
-  const deptId = SUPABASE_STORES[S.deptIdx]?.id || '';
+  const chiefName = getChiefs(di)[mi]?.name || entry.chief_name || '';
+  const deptId = SUPABASE_STORES[di]?.id || '';
   const baseRecord = {
     id: entry.supabase_id || `${dept?.label||''}__${dk}__${mi}__${Date.now()}`,
     date: dk,
@@ -506,9 +507,11 @@ function getRepeatDates(startDk, repeat){
 }
 
 function getEntryColor(e) {
-  // 店舗IDがあれば店舗カラー、なければe.colorを使う
+  // ユーザーが色を設定している場合はそれを優先する
+  if (e.color !== undefined && e.color !== null) return e.color;
+  // デフォルトは店舗カラー
   if (e.store_id) return getStoreColor(e.store_id);
-  return e.color || 0;
+  return 0;
 }
 
 function render(){
@@ -718,7 +721,7 @@ function doMove(oldDk,oldMi,origIdx){
   const nk=`${newDk}__${newMi}`;
   if(!newSched[nk])newSched[nk]=[];
   newSched[nk].push(e);
-  saveToSupabase(e,newDk,newMi);
+  saveToSupabase(e,newDk,newMi,newDi);
   closeModal();render();
 }
 function colorSwatchHTML(sel){return ECOLORS.map((c,i)=>`<div class="color-swatch${i===sel?' selected':''}" style="background:${c.dot}" onclick="selColor(${i})" title="${c.label}"></div>`).join('')}
