@@ -304,7 +304,7 @@ async function loadData(){
             start: row.start_time || '',
             end: row.end_time || '',
             note: row.note || '',
-            color: row.store_id ? getStoreColor(row.store_id) : (row.color || 0),
+            color: (row.color !== undefined && row.color !== null) ? row.color : (row.store_id ? getStoreColor(row.store_id) : 0),
             repeatId: row.repeat_id || undefined,
             supabase_id: row.id,
             store_id: row.store_id || '',
