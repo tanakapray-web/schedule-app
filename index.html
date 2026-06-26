@@ -213,7 +213,7 @@ async function loadData(){
 
     const [schedDeptsRes, salesStoresRes, catsRes, schedRes, attendRes, staffRes] = await Promise.all([
       SB('schedule_depts?select=*&order=sort_order,id'),
-      SB('stores?select=id,name,dept&order=created_at'),
+      SB('stores?select=id,name,dept,routes&order=created_at'),
       SB('cats?select=*'),
       SB('schedules?select=*&order=date,chief_index'),
       SB('schedule_attendance?select=*'),
@@ -258,16 +258,16 @@ async function loadData(){
       S.staff[dk]  = staffArr.filter(p => p.store_id === stableId && p.type === 'staff').sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));
     });
 
-    // 出勤データを schedule_attendance から読み込む
+    // 出勤データを schedule_attendance から読み込む（getSschedと同じネスト構造で格納）
     S.ssched = {};
     if (attendances && attendances.length) {
       attendances.forEach(rec => {
-        // stableId（売上store_idまたはschedule_depts.id）でマッチ
         const si = SUPABASE_STORES.findIndex(s => (s.store_id||s.id) === rec.store_id);
         if (si < 0 || !rec.data) return;
         const dk = `d${si}`;
+        if (!S.ssched[dk]) S.ssched[dk] = {};
         Object.entries(rec.data).forEach(([k, v]) => {
-          S.ssched[`${dk}__${k}`] = v;
+          S.ssched[dk][k] = v;
         });
       });
     }
@@ -404,14 +404,15 @@ async function saveData(){
     // 出勤データのみ保存（chiefs/staffはaddChief/addStaffで個別に保存）
     for (let i = 0; i < SUPABASE_STORES.length; i++) {
       const stableId = SUPABASE_STORES[i].store_id || SUPABASE_STORES[i].id;
-      const dk = `d${i}`;
+      const deptKey = `d${i}`;
+      const sschedForDept = S.ssched[deptKey] || {};
       const relevantMonths = [...new Set(
-        Object.keys(S.ssched).filter(k=>k.startsWith(dk+'__')).map(k=>k.split('__')[1]).filter(Boolean)
+        Object.keys(sschedForDept).map(k=>k.split('__')[0]).filter(Boolean)
       )];
       for(const month of relevantMonths){
         const data={};
-        Object.entries(S.ssched).forEach(([k,v])=>{
-          if(k.startsWith(`${dk}__`)&&k.includes(month)) data[k.slice(dk.length+1)]=v;
+        Object.entries(sschedForDept).forEach(([k,v])=>{
+          if(k.startsWith(month)) data[k]=v;
         });
         const existRes=await SB(`schedule_attendance?store_id=eq.${encodeURIComponent(stableId)}&month=eq.${encodeURIComponent(month)}`);
         const existing=await existRes.json();
@@ -449,7 +450,7 @@ function categoryOptsHTML(sel) {
 }
 function routeOptsHTML(sel, storeId) {
   let h = '<option value="">未選択</option>';
-  const st = storeId ? SUPABASE_STORES.find(s=>s.id===storeId) : null;
+  const st = storeId ? SALES_STORES.find(s=>s.id===storeId) : null;
   const list = (st && Array.isArray(st.routes) && st.routes.length) ? st.routes : (CATS_DATA.route||[]);
   list.forEach(r => {
     const v = typeof r === 'string' ? r : (r.name||r);
@@ -661,14 +662,13 @@ function renderDay(d){
 function toggleStaff(dk,si){const ss=getSsched(S.deptIdx),key=`${dk}__${si}`,cur=ss[key]||'';ss[key]=cur===''?'出勤':cur==='出勤'?'休日':'';render();saveAttendance(S.deptIdx,dk);}
 async function saveAttendance(di, dk){
   const dept=SUPABASE_STORES[di];if(!dept)return;
-  const stableId=dept.store_id||dept.id; // 売上アプリのstore_id（安定）を優先
+  const stableId=dept.store_id||dept.id;
   const month=dk.slice(0,7);
-  const dkPrefix=`d${di}`;
+  const deptKey=`d${di}`;
+  const sschedForDept=S.ssched[deptKey]||{};
   const data={};
-  Object.entries(S.ssched).forEach(([k,v])=>{
-    if(k.startsWith(`${dkPrefix}__`)&&k.includes(month)){
-      data[k.slice(dkPrefix.length+1)]=v;
-    }
+  Object.entries(sschedForDept).forEach(([k,v])=>{
+    if(k.includes(month)) data[k]=v;
   });
   const existRes=await SB(`schedule_attendance?store_id=eq.${encodeURIComponent(stableId)}&month=eq.${encodeURIComponent(month)}`);
   const existing=await existRes.json();
