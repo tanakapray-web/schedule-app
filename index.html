@@ -38,10 +38,12 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
 .bnav-btn i{font-size:22px}
 .bnav-btn.active{color:#185fa5}
 .bnav-btn:active{opacity:.6}
-.table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border:0.5px solid #e0ded8;border-radius:12px;background:#fff}
+.table-wrap{overflow-x:auto;overflow-y:auto;max-height:calc(100vh - 140px);-webkit-overflow-scrolling:touch;border:0.5px solid #e0ded8;border-radius:12px;background:#fff}
 table{border-collapse:collapse;width:100%}
 th,td{border:0.5px solid #e0ded8}
-.th-date{min-width:54px;padding:8px;background:#f8f7f4;font-size:11px;font-weight:500;color:#888;position:sticky;left:0;z-index:2;text-align:left}
+.table-wrap table thead{position:sticky;top:0;z-index:10;}
+.table-wrap table thead th{background:#f8f7f4;}
+.th-date{min-width:54px;padding:8px;background:#f8f7f4;font-size:11px;font-weight:500;color:#888;position:sticky;left:0;z-index:11;text-align:left}
 .th-chief{min-width:88px;padding:8px 6px;background:#f8f7f4;text-align:center;font-size:11px;font-weight:500}
 .th-staff{width:40px;min-width:40px;max-width:40px;padding:6px 2px;background:#f1efe8;text-align:center;font-size:10px;font-weight:500;color:#5f5e5a;overflow:hidden}
 .th-section{padding:5px 6px;font-size:11px;font-weight:500;text-align:center}
@@ -128,6 +130,7 @@ th,td{border:0.5px solid #e0ded8}
     <select id="dept-sel" onchange="changeDept()" style="width:auto;max-width:160px;font-size:13px;padding:7px 28px 7px 10px"></select>
     <button class="btn" onclick="openSettings()"><i class="ti ti-settings"></i> <span class="btn-label">管理</span></button>
     <button class="btn save-btn" onclick="saveData()"><i class="ti ti-cloud-upload"></i> <span class="btn-label">保存</span></button>
+    <button class="btn" onclick="refreshSchedule()" title="データを更新"><i class="ti ti-refresh"></i></button>
     <button class="btn" onclick="exportCSV()"><i class="ti ti-download"></i> <span class="btn-label">出力</span></button>
   </div>
   <div class="status-bar" id="status-bar">読み込み中...</div>
@@ -1042,6 +1045,11 @@ function renderStaffTab(){
   document.getElementById('set-body').innerHTML=h;setTimeout(()=>document.getElementById('new-staff')?.focus(),100);
 }
 
+async function refreshSchedule(){
+  setStatus('更新中...','saving');
+  await loadData();
+  toast('データを更新しました');
+}
 function getStableId(di){ const dept=SUPABASE_STORES[di]; return dept?(dept.store_id||dept.id):null; }
 async function addChief(){
   const n=document.getElementById('new-chief')?.value.trim();
