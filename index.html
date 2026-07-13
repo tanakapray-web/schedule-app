@@ -681,7 +681,16 @@ function renderDay(d){
   document.getElementById('view-area').innerHTML=h;
 }
 
-function toggleStaff(dk,si){const ss=getSsched(S.deptIdx),key=`${dk}__${si}`,cur=ss[key]||'';ss[key]=cur===''?'出勤':cur==='出勤'?'休日':'';render();saveAttendance(S.deptIdx,dk);}
+function toggleStaff(dk,si){
+  const ss=getSsched(S.deptIdx),key=`${dk}__${si}`,cur=ss[key]||'';
+  ss[key]=cur===''?'出勤':cur==='出勤'?'休日':'';
+  const wrap=document.querySelector('.table-wrap');
+  const scrollTop=wrap?wrap.scrollTop:0;
+  const scrollLeft=wrap?wrap.scrollLeft:0;
+  render();
+  if(wrap){wrap.scrollTop=scrollTop;wrap.scrollLeft=scrollLeft;}
+  saveAttendance(S.deptIdx,dk);
+}
 async function saveAttendance(di, dk){
   const dept=SUPABASE_STORES[di];if(!dept)return;
   const stableId=dept.store_id||dept.id;
