@@ -685,10 +685,14 @@ function toggleStaff(dk,si){
   const ss=getSsched(S.deptIdx),key=`${dk}__${si}`,cur=ss[key]||'';
   ss[key]=cur===''?'出勤':cur==='出勤'?'休日':'';
   const wrap=document.querySelector('.table-wrap');
-  const scrollTop=wrap?wrap.scrollTop:0;
+  const scrollTop=wrap?wrap.scrollTop:window.scrollY;
   const scrollLeft=wrap?wrap.scrollLeft:0;
   render();
-  if(wrap){wrap.scrollTop=scrollTop;wrap.scrollLeft=scrollLeft;}
+  requestAnimationFrame(()=>{
+    const newWrap=document.querySelector('.table-wrap');
+    if(newWrap){newWrap.scrollTop=scrollTop;newWrap.scrollLeft=scrollLeft;}
+    else{window.scrollTo(0,scrollTop);}
+  });
   saveAttendance(S.deptIdx,dk);
 }
 async function saveAttendance(di, dk){
