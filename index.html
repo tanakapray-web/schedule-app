@@ -237,7 +237,7 @@ async function loadData(){
       SB('schedule_depts?select=*&order=sort_order,id'),
       SB('stores?select=id,name,dept,routes&order=created_at'),
       SB('cats?select=*'),
-      SB('schedules?select=*&order=date,chief_index'),
+      SB('schedules?select=*&order=date,chief_index&limit=10000'),
       SB('schedule_attendance?select=*'),
       SB('schedule_staff?select=*&order=sort_order,id')
     ]);
