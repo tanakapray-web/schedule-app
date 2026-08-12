@@ -1230,7 +1230,11 @@ function getCombinedStaff(){
 function changeDept(){S.deptIdx=parseInt(document.getElementById('dept-sel').value);render()}
 function showModal(){document.getElementById('modal-bg').style.display='flex'}
 function closeModal(){document.getElementById('modal-bg').style.display='none';render()}
-function closeBg(e){if(e.target.id==='modal-bg')closeModal()}
+function closeBg(e){if(e.target.id==='modal-bg'&&!_modalDragging)closeModal()}
+let _modalDragStart=null,_modalDragging=false;
+document.addEventListener('mousedown',e=>{_modalDragStart={x:e.clientX,y:e.clientY};_modalDragging=false;});
+document.addEventListener('mousemove',e=>{if(_modalDragStart&&(Math.abs(e.clientX-_modalDragStart.x)>5||Math.abs(e.clientY-_modalDragStart.y)>5))_modalDragging=true;});
+document.addEventListener('mouseup',()=>{setTimeout(()=>{_modalDragging=false;_modalDragStart=null;},100);});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
 try{const _vs=JSON.parse(localStorage.getItem('schedView')||'null');if(_vs){if(['day','week','month'].includes(_vs.view))S.view=_vs.view;if(typeof _vs.offset==='number')S.offset=_vs.offset;if(typeof _vs.deptIdx==='number')S.deptIdx=_vs.deptIdx;}}catch(e){}
 loadData();
