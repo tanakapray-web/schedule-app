@@ -733,6 +733,8 @@ function staffPickerHTML(dk, selected){
 }
 function getSelectedStaff(){return [...document.querySelectorAll('input[name="f-staff"]:checked')].map(c=>c.value);}
 function openMove(dk,mi,origIdx,ei){
+  // 編集モーダルのチェック済みチーフを保存（移動元削除に使う）
+  editCtx.srcCheckedMis=[...document.querySelectorAll('input[name="f-member-cb"]:checked')].map(cb=>parseInt(cb.value));
   const depts=getDepts();
   const chiefs=getChiefs(S.deptIdx);
   const deptOpts=depts.map((d,i)=>`<option value="${i}"${i===S.deptIdx?' selected':''}>${d.label}</option>`).join('');
@@ -762,7 +764,7 @@ function doMove(oldDk,oldMi,origIdx){
   if(!newDk){alert('日付を選んでください');return;}
   if(!destMis.length){alert('移動先のチーフを選択してください');return;}
   // 編集モーダルでチェックされてたチーフの元予定を削除
-  const srcCheckedMis=[...document.querySelectorAll('input[name="f-member-cb"]:checked')].map(cb=>parseInt(cb.value));
+  const srcCheckedMis=editCtx.srcCheckedMis||[editCtx.mi];
   const groupEntries=findGroupEntries(oldDk,e.name,e.start);
   groupEntries.filter(g=>srcCheckedMis.includes(g.mi)).forEach(g=>{
     const arr=csched[`${oldDk}__${g.mi}`];
