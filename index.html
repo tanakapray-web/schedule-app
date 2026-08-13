@@ -991,7 +991,7 @@ function startApp(){
   render();
 }
 
-(async()=>{showLoading(true);await tryRestore();showLoading(false);startApp();})();
+(async()=>{await loadData();})();
 </script>
 </body>
 </html>
