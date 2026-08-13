@@ -815,7 +815,10 @@ function openEdit(dk,mi,ei){
   const sched=getCsched(S.deptIdx),entries=sched[`${dk}__${mi}`]||[],sorted=sortE(entries),e=sorted[ei];
   if(!e)return;const origIdx=entries.indexOf(e);editCtx={dk,mi,origIdx};
   const currentColor=e.color||0;
+  const chiefs=getChiefs(S.deptIdx);
+  const chiefChecks=chiefs.map((m,i)=>`<label style="display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer;padding:6px 10px;background:var(--bg3);border-radius:8px;"><input type="checkbox" name="f-member-cb" value="${i}"${i===mi?' checked':''}> ${m.name}</label>`).join('');
   document.getElementById('modal-box').innerHTML=mHTML('予定を編集',`
+    <div class="field"><label>チーフ（複数選択可）</label><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;">${chiefChecks}</div></div>
     <div class="field"><label>現場名</label><input type="text" id="f-name" value="${e.name}" autocomplete="off" /></div>
     <div class="row2"><div class="field"><label>開始</label>${timePickerHTML('f-start',e.start||'')}</div><div class="field"><label>終了</label>${timePickerHTML('f-end',e.end||'')}</div></div>
     <div class="field"><label>備考</label><textarea id="f-note">${e.note||''}</textarea></div>
@@ -923,11 +926,30 @@ function updateEntry(){
   const sales=getSalesFields();
   const staff_names=getSelectedStaff();
   const color=parseInt(document.getElementById('f-color')?.value||0);
-  const e=getCsched(S.deptIdx)[`${dk}__${mi}`]?.[origIdx];
+  const stype=document.querySelector('input[name="f-stype"]:checked')?.value||'service';
+  const checkedMis=[...document.querySelectorAll('input[name="f-member-cb"]:checked')].map(cb=>parseInt(cb.value));
+  const csched=getCsched(S.deptIdx);
+  const e=csched[`${dk}__${mi}`]?.[origIdx];
   if(!e){alert('更新対象が見つかりません');return;}
-  const updated={...e,name,start,end,note,color,...sales,staff_names};
-  getCsched(S.deptIdx)[`${dk}__${mi}`][origIdx]=updated;
-  saveToSupabase(updated,dk,mi);
+  const updated={...e,name,start,end,note,color,...sales,staff_names,schedule_type:stype};
+  if(checkedMis.includes(mi)){
+    // 元のチーフを更新
+    csched[`${dk}__${mi}`][origIdx]=updated;
+    saveToSupabase(updated,dk,mi);
+  } else {
+    // 元のチーフからは削除
+    deleteFromSupabase(e.supabase_id);
+    csched[`${dk}__${mi}`].splice(origIdx,1);
+    if(!csched[`${dk}__${mi}`].length)delete csched[`${dk}__${mi}`];
+  }
+  // 他のチーフにコピー or 追加
+  checkedMis.filter(cmi=>cmi!==mi).forEach(cmi=>{
+    const key=`${dk}__${cmi}`;
+    if(!csched[key])csched[key]=[];
+    const newE={...updated,supabase_id:undefined};
+    csched[key].push(newE);
+    saveToSupabase(newE,dk,cmi);
+  });
   closeModal();render();
 }
 
