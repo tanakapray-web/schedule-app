@@ -547,6 +547,11 @@ function getEntryColor(e) {
 }
 
 function render(){
+  // スクロール位置を保存
+  const wrap=document.querySelector('.table-wrap');
+  const scrollTop=wrap?wrap.scrollTop:window.scrollY;
+  const scrollLeft=wrap?wrap.scrollLeft:0;
+
   try{localStorage.setItem('schedView',JSON.stringify({view:S.view,offset:S.offset,deptIdx:S.deptIdx}));}catch(e){}
   const depts=getDepts();if(S.deptIdx>=depts.length)S.deptIdx=0;
   document.getElementById('dept-sel').innerHTML=depts.map((d,i)=>`<option value="${i}"${i===S.deptIdx?' selected':''}>${d.label}</option>`).join('');
@@ -559,6 +564,12 @@ function render(){
   if(S.view==='week'){const end=new Date(base);end.setDate(end.getDate()+6);document.getElementById('nav-label').textContent=`${fmtS(base)}〜${fmtS(end)}`;renderWeek(base);}
   else if(S.view==='month'){document.getElementById('nav-label').textContent=`${base.getFullYear()}年${base.getMonth()+1}月`;renderMonth(base);}
   else{document.getElementById('nav-label').textContent=`${fmtS(base)}（${fmtDow(base)}）`;renderDay(base);}
+  // スクロール位置を復元
+  requestAnimationFrame(()=>{
+    const newWrap=document.querySelector('.table-wrap');
+    if(newWrap){newWrap.scrollTop=scrollTop;newWrap.scrollLeft=scrollLeft;}
+    else{window.scrollTo(0,scrollTop);}
+  });
 }
 
 function makeChiefCells(dk,di,wk,chiefs,csched){
