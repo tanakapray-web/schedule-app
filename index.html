@@ -955,3 +955,43 @@ function saveEntry(){
   });
   closeModal();render();
 }
+
+
+function jumpToDate(dateStr,storeId){
+  if(storeId){
+    const di=getDeptIndexByDept(storeId);
+    if(di>=0&&di!==S.deptIdx){
+      S.deptIdx=di;
+      const sel=document.getElementById('dept-sel');
+      if(sel)sel.value=di;
+    }
+  }
+  const target=parseDateKey(dateStr);
+  const t=today();
+  if(S.view==='week'){
+    const targetMon=mondayOf(target);
+    const todayMon=mondayOf(t);
+    S.offset=Math.round((targetMon-todayMon)/(7*24*60*60*1000));
+  } else if(S.view==='month'){
+    S.offset=(target.getFullYear()-t.getFullYear())*12+(target.getMonth()-t.getMonth());
+  } else {
+    S.offset=Math.round((target-t)/(24*60*60*1000));
+  }
+  render();
+}
+
+async function tryRestore(){
+  await loadData();
+  return true;
+}
+
+function startApp(){
+  const sel=document.getElementById('dept-sel');
+  if(sel)sel.innerHTML=getDepts().map((d,i)=>`<option value="${i}">${d.label}</option>`).join('');
+  render();
+}
+
+(async()=>{showLoading(true);await tryRestore();showLoading(false);startApp();})();
+</script>
+</body>
+</html>
