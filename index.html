@@ -806,6 +806,45 @@ function openAdd(dk,mi){
   showModal();setTimeout(()=>document.getElementById('f-name').focus(),100);
 }
 
+function updateEntry(){
+  if(!editCtx)return;
+  const{dk,mi,origIdx}=editCtx;
+  const name=document.getElementById('f-name').value.trim();if(!name)return;
+  const start=getTime('f-start'),end=getTime('f-end'),note=document.getElementById('f-note').value.trim();
+  const sales=getSalesFields();
+  const staff_names=getSelectedStaff();
+  const color=parseInt(document.getElementById('f-color')?.value||0);
+  const e=getCsched(S.deptIdx)[`${dk}__${mi}`]?.[origIdx];
+  if(!e){alert('更新対象が見つかりません');return;}
+  const updated={...e,name,start,end,note,color,...sales,staff_names};
+  getCsched(S.deptIdx)[`${dk}__${mi}`][origIdx]=updated;
+  saveToSupabase(updated,dk,mi);
+  closeModal();render();
+}
+function deleteEntry(){
+  if(!editCtx)return;
+  const{dk,mi,origIdx}=editCtx;
+  if(!confirm('この予定を削除しますか？'))return;
+  const entries=getCsched(S.deptIdx)[`${dk}__${mi}`];
+  const e=entries?.[origIdx];
+  if(e&&e.supabase_id)deleteFromSupabase(e.supabase_id);
+  if(entries)entries.splice(origIdx,1);
+  closeModal();render();
+}
+function deleteRepeat(repeatId,mi){
+  if(!confirm('繰り返し予定をすべて削除しますか？'))return;
+  const csched=getCsched(S.deptIdx);
+  Object.keys(csched).forEach(k=>{
+    const arr=csched[k];if(!arr)return;
+    for(let i=arr.length-1;i>=0;i--){
+      if(arr[i].repeatId===repeatId){
+        if(arr[i].supabase_id)deleteFromSupabase(arr[i].supabase_id);
+        arr.splice(i,1);
+      }
+    }
+  });
+  closeModal();render();
+}
 function toggleRepeatEnd(){
   const v=document.getElementById('f-repeat').value;
   document.getElementById('repeat-end-wrap').style.display=v==='none'?'none':'block';
