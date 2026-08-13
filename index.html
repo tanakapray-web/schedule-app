@@ -778,7 +778,7 @@ function openAdd(dk,mi){
     for(let i=0;i<days;i++){const d=new Date(base);d.setDate(d.getDate()+i);dateOpts+=`<option value="${dateKey(d)}">${fmtS(d)}（${fmtDow(d)}）</option>`}}
   document.getElementById('modal-box').innerHTML=mHTML('予定を追加',`
     ${!dk?`<div class="field"><label>日付</label><select id="f-date">${dateOpts}</select></div>`:`<input type="hidden" id="f-date" value="${dk}">`}
-    <div class="field"><label>チーフ（複数選択可）</label><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;">${chiefs.map((m,i)=>`<label style="display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer;padding:6px 10px;background:var(--bg3);border-radius:8px;"><input type="checkbox" name="f-member-cb" value="${i}" ${i===(mi!=null?mi:0)?'checked':''}> ${m.name}</label>`).join('')}</div></div>
+    <div class="field"><label>チーフ（複数選択可）</label><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;">${chiefs.map((m,i)=>`<label style="display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer;padding:6px 10px;background:var(--bg3);border-radius:8px;"><input type="checkbox" name="f-member-cb" value="${i}"${i===(mi!=null?mi:0)?' checked':''}> ${m.name}</label>`).join('')}</div></div>
     <div class="field"><label>現場名</label><input type="text" id="f-name" placeholder="例：A現場、〇〇工事" autocomplete="off" /></div>
     <div class="row2"><div class="field"><label>開始</label>${timePickerHTML('f-start','')}</div><div class="field"><label>終了</label>${timePickerHTML('f-end','')}</div></div>
     <div class="field"><label>備考</label><textarea id="f-note" placeholder="メモや詳細など"></textarea></div>
@@ -806,45 +806,6 @@ function openAdd(dk,mi){
   showModal();setTimeout(()=>document.getElementById('f-name').focus(),100);
 }
 
-function updateEntry(){
-  if(!editCtx)return;
-  const{dk,mi,origIdx}=editCtx;
-  const name=document.getElementById('f-name').value.trim();if(!name)return;
-  const start=getTime('f-start'),end=getTime('f-end'),note=document.getElementById('f-note').value.trim();
-  const sales=getSalesFields();
-  const staff_names=getSelectedStaff();
-  const color=parseInt(document.getElementById('f-color')?.value||0);
-  const e=getCsched(S.deptIdx)[`${dk}__${mi}`]?.[origIdx];
-  if(!e){alert('更新対象が見つかりません');return;}
-  const updated={...e,name,start,end,note,color,...sales,staff_names};
-  getCsched(S.deptIdx)[`${dk}__${mi}`][origIdx]=updated;
-  saveToSupabase(updated,dk,mi);
-  closeModal();render();
-}
-function deleteEntry(){
-  if(!editCtx)return;
-  const{dk,mi,origIdx}=editCtx;
-  if(!confirm('この予定を削除しますか？'))return;
-  const entries=getCsched(S.deptIdx)[`${dk}__${mi}`];
-  const e=entries?.[origIdx];
-  if(e&&e.supabase_id)deleteFromSupabase(e.supabase_id);
-  if(entries)entries.splice(origIdx,1);
-  closeModal();render();
-}
-function deleteRepeat(repeatId,mi){
-  if(!confirm('繰り返し予定をすべて削除しますか？'))return;
-  const csched=getCsched(S.deptIdx);
-  Object.keys(csched).forEach(k=>{
-    const arr=csched[k];if(!arr)return;
-    for(let i=arr.length-1;i>=0;i--){
-      if(arr[i].repeatId===repeatId){
-        if(arr[i].supabase_id)deleteFromSupabase(arr[i].supabase_id);
-        arr.splice(i,1);
-      }
-    }
-  });
-  closeModal();render();
-}
 function toggleRepeatEnd(){
   const v=document.getElementById('f-repeat').value;
   document.getElementById('repeat-end-wrap').style.display=v==='none'?'none':'block';
@@ -921,51 +882,290 @@ function getSalesFields() {
 }
 
 function saveEntry(){
-  if(editCtx)return updateEntry();
   const di=S.deptIdx,dk=document.getElementById('f-date').value;
-  const name=document.getElementById('f-name').value.trim();if(!name)return;
-  const start=getTime('f-start'),end=getTime('f-end'),note=document.getElementById('f-note').value.trim();
-  const sales=getSalesFields();
-  const staff_names=getSelectedStaff();
-  const color=parseInt(document.getElementById('f-color')?.value||0);
-  const repeatV=document.getElementById('f-repeat')?.value||'none';
-  const repeatEnd=document.getElementById('f-repeat-end')?.value||'';
-  const repeatId=repeatV!=='none'?`rep_${Date.now()}_${Math.random().toString(36).slice(2)}`:null;
-  const stype=document.querySelector('input[name="f-stype"]:checked')?.value||'service';
-  // チェックされた全チーフを取得
   const checkedMis=[...document.querySelectorAll('input[name="f-member-cb"]:checked')].map(cb=>parseInt(cb.value));
   if(!checkedMis.length)return;
-  const csched=getCsched(di);
+  const name=document.getElementById('f-name').value.trim();if(!name)return;
+  const start=getTime('f-start'),end=getTime('f-end'),note=document.getElementById('f-note').value.trim();
+  const repeat=document.getElementById('f-repeat')?.value||'none';
+  const sales=getSalesFields();
+  const staff_names=getSelectedStaff();
+  const color=parseInt(document.getElementById("f-color")?.value||0);
+  const sched=getCsched(di);
   checkedMis.forEach(mi=>{
-    const entry={name,start,end,note,color,...sales,staff_names,schedule_type:stype};
-    if(repeatId){
-      entry.repeatId=repeatId;
-      const dates=getRepeatDates(dk,repeatV,repeatEnd);
-      dates.forEach(d=>{
-        const e2={...entry};
-        const k2=`${d}__${mi}`;if(!csched[k2])csched[k2]=[];
-        csched[k2].push(e2);
-        saveToSupabase(e2,d,mi);
-      });
+    const key=`${dk}__${mi}`;if(!sched[key])sched[key]=[];
+    if(repeat==='none'){
+      const entry={name,start,end,note,color,...sales,staff_names};
+      sched[key].push(entry);saveToSupabase(entry,dk,mi);
     } else {
-      const k=`${dk}__${mi}`;if(!csched[k])csched[k]=[];
-      csched[k].push(entry);
-      saveToSupabase(entry,dk,mi);
+      const repeatId='r'+Date.now()+'_'+mi;
+      const entry={name,start,end,note,color,repeatId,...sales,staff_names};
+      sched[key].push(entry);saveToSupabase(entry,dk,mi);
+      const endInput=document.getElementById('f-repeat-end')?.value;
+      let endDate=new Date(parseDateKey(dk));endDate.setFullYear(endDate.getFullYear()+1);
+      if(endInput){const p=endInput.split('/');if(p.length===3)endDate=new Date(parseInt(p[0]),parseInt(p[1])-1,parseInt(p[2]));}
+      getRepeatDates(dk,repeat).forEach(rdk=>{
+        if(parseDateKey(rdk)>endDate)return;
+        const rkey=`${rdk}__${mi}`;if(!sched[rkey])sched[rkey]=[];
+        const rEntry={name,start,end,note,color,repeatId,...sales,staff_names,supabase_id:undefined};
+        sched[rkey].push(rEntry);saveToSupabase(rEntry,rdk,mi);
+      });
     }
   });
   closeModal();render();
 }
 
+function updateEntry(){
+  if(!editCtx)return;
+  const{dk,mi,origIdx}=editCtx;
+  const name=document.getElementById('f-name').value.trim();if(!name)return;
+  const start=getTime('f-start'),end=getTime('f-end'),note=document.getElementById('f-note').value.trim();
+  const sales=getSalesFields();
+  const staff_names=getSelectedStaff();
+  const color=parseInt(document.getElementById('f-color')?.value||0);
+  const e=getCsched(S.deptIdx)[`${dk}__${mi}`]?.[origIdx];
+  if(!e){alert('更新対象が見つかりません');return;}
+  const updated={...e,name,start,end,note,color,...sales,staff_names};
+  getCsched(S.deptIdx)[`${dk}__${mi}`][origIdx]=updated;
+  saveToSupabase(updated,dk,mi);
+  closeModal();render();
+}
 
+function deleteEntry(){
+  if(!editCtx)return;const{dk,mi,origIdx}=editCtx,sched=getCsched(S.deptIdx),key=`${dk}__${mi}`;
+  const e=sched[key][origIdx];
+  deleteFromSupabase(e.supabase_id);
+  sched[key].splice(origIdx,1);if(!sched[key].length)delete sched[key];closeModal();render();
+}
+
+function deleteRepeat(repeatId,mi){
+  if(!confirm('この繰り返し予定を全て削除しますか？'))return;
+  const sched=getCsched(S.deptIdx);
+  Object.keys(sched).forEach(key=>{
+    if(key.endsWith(`__${mi}`)){
+      sched[key].forEach(e=>{if(e.repeatId===repeatId)deleteFromSupabase(e.supabase_id);});
+      sched[key]=sched[key].filter(e=>e.repeatId!==repeatId);
+      if(!sched[key].length)delete sched[key];
+    }
+  });
+  closeModal();render();
+}
+
+function exportCSV(){
+  const di=S.deptIdx,chiefs=getChiefs(di),staff=getStaff(di),csched=getCsched(di),ssched=getSsched(di);
+  const base=getBase();let dates=[];
+  if(S.view==='week'){dates=Array.from({length:7},(_,i)=>{const d=new Date(base);d.setDate(d.getDate()+i);return d});}
+  else if(S.view==='month'){const year=base.getFullYear(),month=base.getMonth();const lastDay=new Date(year,month+1,0).getDate();dates=Array.from({length:lastDay},(_,i)=>new Date(year,month,i+1));}
+  else{dates=[base];}
+  let csv='\uFEFF日付,曜日';
+  chiefs.forEach(m=>csv+=`,${m.name}（現場）,${m.name}（時間）,${m.name}（備考）,${m.name}（店舗）,${m.name}（区分）,${m.name}（受注経路）,${m.name}（金額）`);
+  staff.forEach(s=>csv+=`,${s.name}`);csv+='\n';
+  dates.forEach(d=>{
+    const dk=dateKey(d);
+    const maxE=Math.max(1,...chiefs.map((_,mi)=>(csched[`${dk}__${mi}`]||[]).length));
+    for(let ei=0;ei<maxE;ei++){
+      csv+=ei===0?`${fmtS(d)},${fmtDow(d)}`:`${fmtS(d)},`;
+      chiefs.forEach((_,mi)=>{const entries=sortE(csched[`${dk}__${mi}`]||[]);const e=entries[ei];
+        if(e){const time=e.start?(e.end?`${e.start}〜${e.end}`:`${e.start}〜`):'';
+          const storeName=e.store_id?(SUPABASE_STORES.find(s=>s.id===e.store_id)?.name||''):'';
+          csv+=`,"${e.name}","${time}","${e.note||''}","${storeName}","${e.category||''}","${e.route||''}","${e.amount||''}"`;
+        }else{csv+=',,,,,,,';} });
+      if(ei===0){staff.forEach((_,si)=>{const v=ssched[`${dk}__${si}`]||'';csv+=`,"${v}"`;});}
+      else{staff.forEach(()=>csv+=',');}csv+='\n';}});
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);const a=document.createElement('a');
+  a.href=url;a.download=`schedule_${fmtS(base).replace('/','')}.csv`;a.click();URL.revokeObjectURL(url);
+}
+
+function openSettings(){
+  document.getElementById('modal-box').innerHTML=mHTML('管理',`<div id="set-tabs" style="display:flex;gap:6px;margin-bottom:1rem"><button class="btn active" id="st-store" onclick="setTab('store')">店舗・部署</button><button class="btn" id="st-chief" onclick="setTab('chief')">チーフ</button><button class="btn" id="st-staff" onclick="setTab('staff')">スタッフ</button></div><div id="set-body"></div>`);
+  showModal();setTab('store');
+}
+function setTab(t){
+  ['store','chief','staff'].forEach(x=>document.getElementById(`st-${x}`).className='btn'+(x===t?' active':''));
+  if(t==='store')renderStoreTab();else if(t==='chief')renderChiefTab();else renderStaffTab();
+}
+function renderStoreTab(){
+  const depts = getDepts();
+  let h = '';
+  if(!depts.length){
+    h += '<p style="color:#bbb;font-size:13px;margin-bottom:12px;">まだ部署が登録されていません。下のボタンから追加してください。</p>';
+  } else {
+    depts.forEach((d,i) => {
+      const s = SUPABASE_STORES[i];
+      const linked = s && s.store_id ? '<span style="font-size:10px;background:rgba(47,116,208,.15);color:#3a7bd5;padding:2px 7px;border-radius:4px;margin-left:6px;">売上連携</span>' : '<span style="font-size:10px;background:rgba(136,146,164,.15);color:#888;padding:2px 7px;border-radius:4px;margin-left:6px;">専用</span>';
+      h += `<div class="store-block" style="margin-bottom:8px;">
+        <div class="inline-row">
+          <input type="text" value="${s.name}" style="flex:1" onchange="renameSchedDept(${i},this.value)" />
+          ${linked}
+          <button class="btn danger" style="padding:8px;min-height:44px" onclick="delSchedDept(${i})"><i class="ti ti-trash"></i></button>
+        </div>
+      </div>`;
+    });
+  }
+  // 追加ボタン2種
+  h += `<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+    <button class="btn" style="flex:1;min-height:48px;font-size:13px;justify-content:center;" onclick="openAddSchedDeptFromSales()"><i class="ti ti-building-store"></i> 売上アプリの部署から追加</button>
+    <button class="btn" style="flex:1;min-height:48px;font-size:13px;justify-content:center;" onclick="addSchedDeptNew()"><i class="ti ti-plus"></i> スケジュール専用で追加</button>
+  </div>`;
+  h += `<div class="modal-btns"><button class="btn primary" onclick="closeModal()">完了</button></div>`;
+  document.getElementById('set-body').innerHTML = h;
+}
+function openAddSchedDeptFromSales(){
+  if(!SALES_STORES.length){alert('売上アプリの部署が読み込まれていません');return;}
+  const already = SUPABASE_STORES.map(s=>s.store_id).filter(Boolean);
+  const available = SALES_STORES.filter(s=>!already.includes(s.id));
+  if(!available.length){alert('追加できる部署がありません（全部追加済みか、売上アプリに部署が登録されていません）');return;}
+  document.getElementById('set-body').innerHTML=`
+    <div style="margin-bottom:12px;font-size:13px;color:#888;">売上アプリの部署を選んでください</div>
+    <select id="sales-dept-sel" class="form-input" style="width:100%;margin-bottom:12px;">
+      ${available.map(s=>`<option value="${s.id}">${s.name}${s.dept?' '+s.dept:''}</option>`).join('')}
+    </select>
+    <div class="modal-btns">
+      <button class="btn" onclick="setTab('store')">戻る</button>
+      <button class="btn primary" onclick="confirmAddFromSales()">追加</button>
+    </div>`;
+}
+async function confirmAddFromSales(){
+  const storeId = document.getElementById('sales-dept-sel').value;
+  const s = SALES_STORES.find(x=>x.id===storeId);
+  if(!s)return;
+  const name = s.name+(s.dept?' '+s.dept:'');
+  const newDept = {id:'sd_'+Date.now(), store_id: storeId, name, chiefs:[], staff:[], sort_order: SUPABASE_STORES.length};
+  const res = await SB('schedule_depts', {method:'POST', body: JSON.stringify(newDept)});
+  if(res.ok){await loadData();setTab('store');toast('追加しました。予定も再読み込みしました');}
+  else{alert('追加に失敗しました');}
+}
+async function addSchedDeptNew(){
+  const name = prompt('部署名を入力してください（例: スケジュール専用チーム）');
+  if(!name||!name.trim())return;
+  const newDept = {id:'sd_'+Date.now(), store_id: null, name:name.trim(), chiefs:[], staff:[], sort_order: SUPABASE_STORES.length};
+  const res = await SB('schedule_depts', {method:'POST', body: JSON.stringify(newDept)});
+  if(res.ok){await loadData();setTab('store');toast('追加しました。予定も再読み込みしました');}
+  else{alert('追加に失敗しました');}
+}
+async function renameSchedDept(i, newName){
+  if(!SUPABASE_STORES[i])return;
+  SUPABASE_STORES[i].name=newName;
+  S.stores[i]={...S.stores[i],name:newName};
+  await SB(`schedule_depts?id=eq.${encodeURIComponent(SUPABASE_STORES[i].id)}`,{method:'PATCH',body:JSON.stringify({name:newName})});
+  render();
+}
+async function delSchedDept(i){
+  if(!confirm('この部署を削除しますか？チーフ・スタッフ情報も削除されます。\n（この部署の予定データはSupabaseに残ります）'))return;
+  const s=SUPABASE_STORES[i];
+  await SB(`schedule_depts?id=eq.${encodeURIComponent(s.id)}`,{method:'DELETE'});
+  SUPABASE_STORES.splice(i,1);
+  // インデックスを詰める
+  const newChiefs={},newStaff={},newCsched={};
+  SUPABASE_STORES.forEach((_,ni)=>{
+    newChiefs[`d${ni}`]=S.chiefs[`d${ni<i?ni:ni+1}`]||[];
+    newStaff[`d${ni}`]=S.staff[`d${ni<i?ni:ni+1}`]||[];
+    newCsched[`d${ni}`]=S.csched[`d${ni<i?ni:ni+1}`]||{};
+  });
+  S.chiefs=newChiefs;S.staff=newStaff;S.csched=newCsched;
+  if(S.deptIdx>=SUPABASE_STORES.length)S.deptIdx=0;
+  render();setTab('store');toast('削除しました');
+}
+function renderChiefTab(){
+  const di=S.deptIdx,depts=getDepts(),chiefs=getChiefs(di);
+  let h=`<div class="field"><label>対象部署</label><select onchange="S.deptIdx=parseInt(this.value);setTab('chief')">${depts.map((d,i)=>`<option value="${i}"${i===di?' selected':''}>${d.label}</option>`).join('')}</select></div>`;
+  h+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">'+chiefs.map((m,i)=>`<div class="chip"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${CAVS[i%8]}"></span>${m.name}<button onclick="delChief(${i})"><i class="ti ti-x"></i></button></div>`).join('')+'</div>';
+  h+=`<div class="inline-row"><input type="text" id="new-chief" placeholder="チーフ名" style="flex:1" /><button class="btn primary" style="min-height:48px;padding:8px 16px;font-size:14px" onclick="addChief()"><i class="ti ti-plus"></i> 追加</button></div>`;
+  h+=`<div class="modal-btns"><button class="btn primary" onclick="closeModal()">完了</button></div>`;
+  document.getElementById('set-body').innerHTML=h;setTimeout(()=>document.getElementById('new-chief')?.focus(),100);
+}
+function renderStaffTab(){
+  const di=S.deptIdx,depts=getDepts(),staff=getStaff(di);
+  let h=`<div class="field"><label>対象部署</label><select onchange="S.deptIdx=parseInt(this.value);setTab('staff')">${depts.map((d,i)=>`<option value="${i}"${i===di?' selected':''}>${d.label}</option>`).join('')}</select></div>`;
+  h+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">'+staff.map((s,i)=>`<div class="chip">${s.name}<button onclick="delStaff(${i})"><i class="ti ti-x"></i></button></div>`).join('')+'</div>';
+  h+=`<div class="inline-row"><input type="text" id="new-staff" placeholder="スタッフ名" style="flex:1" /><button class="btn primary" style="min-height:48px;padding:8px 16px;font-size:14px" onclick="addStaff()"><i class="ti ti-plus"></i> 追加</button></div>`;
+  h+=`<div class="modal-btns"><button class="btn primary" onclick="closeModal()">完了</button></div>`;
+  document.getElementById('set-body').innerHTML=h;setTimeout(()=>document.getElementById('new-staff')?.focus(),100);
+}
+
+async function autoArchiveOldSchedules(){
+  // 2年以上前のスケジュールをアーカイブへ移動
+  const cutoff=new Date();cutoff.setFullYear(cutoff.getFullYear()-2);
+  const cutoffStr=cutoff.toISOString().slice(0,10);
+  try{
+    // 古いデータを取得
+    const oldRes=await SB(`schedules?date=lt.${cutoffStr}&select=*&limit=500`);
+    if(!oldRes.ok)return;
+    const oldData=await oldRes.json();
+    if(!oldData||!oldData.length)return;
+    // archiveテーブルにコピー
+    const archRes=await SB('schedules_archive',{method:'POST',body:JSON.stringify(oldData)});
+    if(!archRes.ok)return;
+    // 元テーブルから削除
+    await SB(`schedules?date=lt.${cutoffStr}`,{method:'DELETE'});
+    console.log(`${oldData.length}件のスケジュールをアーカイブしました`);
+    setStatus(`${oldData.length}件の古いスケジュールをアーカイブしました`,'saved');
+  }catch(e){console.error('archive error',e);}
+}
+async function refreshSchedule(){
+  setStatus('更新中...','saving');
+  await loadData();
+  toast('データを更新しました');
+}
+function openSearch(){
+  const overlay=document.getElementById('search-overlay');
+  overlay.style.display='flex';
+  // 店舗プルダウンをSALES_STORESで更新
+  const storeSel=document.getElementById('search-store');
+  storeSel.innerHTML='<option value="">全店舗</option>'+
+    SALES_STORES.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
+  document.getElementById('search-input').value='';
+  document.getElementById('search-results').innerHTML='<div style="text-align:center;color:#aaa;padding:24px;font-size:13px;">現場名を入力してください</div>';
+  setTimeout(()=>document.getElementById('search-input').focus(),100);
+}
+function closeSearch(){
+  document.getElementById('search-overlay').style.display='none';
+}
+let _searchTimer=null;
+async function searchSchedule(){
+  const q=document.getElementById('search-input').value.trim();
+  const storeId=document.getElementById('search-store').value;
+  const res=document.getElementById('search-results');
+  if(q.length<1){res.innerHTML='<div style="text-align:center;color:#aaa;padding:24px;font-size:13px;">現場名を入力してください</div>';return;}
+  res.innerHTML='<div style="text-align:center;color:#aaa;padding:24px;font-size:13px;">検索中...</div>';
+  // debounce
+  clearTimeout(_searchTimer);
+  _searchTimer=setTimeout(async()=>{
+    const SB_URL=SUPABASE_URL+'/rest/v1/schedules';
+    let params=`?name=ilike.*${encodeURIComponent(q)}*&select=*&order=date.desc&limit=100`;
+    if(storeId)params+=`&store_id=eq.${encodeURIComponent(storeId)}`;
+    const r=await fetch(SB_URL+params,{headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}});
+    const data=await r.json();
+    if(!data||!data.length){res.innerHTML='<div style="text-align:center;color:#aaa;padding:24px;font-size:13px;">該当する予定が見つかりませんでした</div>';return;}
+    const today_str=dateKey(today());
+    const rows=data.map(row=>{
+      const storeName=SALES_STORES.find(s=>s.id===row.store_id)?.name||row.dept||'';
+      const chief=row.chief_name||'';
+      const isPast=row.date<today_str;
+      const timeStr=row.start_time?(row.end_time?`${row.start_time}〜${row.end_time}`:`${row.start_time}〜`):'';
+      return`<div onclick="jumpToDate('${row.date}','${row.store_id||''}');closeSearch();" style="padding:12px 20px;cursor:pointer;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;gap:12px;" onmouseover="this.style.background='#f8f8f8'" onmouseout="this.style.background=''">
+        <div style="font-size:12px;color:${isPast?'#aaa':'#1d9e75'};min-width:90px;font-weight:600;">${row.date}</div>
+        <div style="flex:1;">
+          <div style="font-size:14px;font-weight:600;">${row.name}</div>
+          <div style="font-size:11px;color:#aaa;margin-top:2px;">${[storeName,chief,timeStr].filter(Boolean).join(' · ')}</div>
+        </div>
+        <div style="font-size:11px;color:#bbb;">${isPast?'過去':'予定'}</div>
+      </div>`;
+    });
+    res.innerHTML=rows.join('');
+  },300);
+}
 function jumpToDate(dateStr,storeId){
+  // 対象の部署インデックスを特定
   if(storeId){
     const di=getDeptIndexByDept(storeId);
     if(di>=0&&di!==S.deptIdx){
       S.deptIdx=di;
-      const sel=document.getElementById('dept-sel');
-      if(sel)sel.value=di;
+      document.getElementById('dept-sel').value=di;
     }
   }
+  // 日付からoffsetを計算して週表示でジャンプ
   const target=parseDateKey(dateStr);
   const t=today();
   if(S.view==='week'){
@@ -975,23 +1175,74 @@ function jumpToDate(dateStr,storeId){
   } else if(S.view==='month'){
     S.offset=(target.getFullYear()-t.getFullYear())*12+(target.getMonth()-t.getMonth());
   } else {
-    S.offset=Math.round((target-t)/(24*60*60*1000));
+    const diff=Math.round((target-t)/(24*60*60*1000));
+    S.offset=diff;
   }
   render();
 }
-
-async function tryRestore(){
-  await loadData();
-  return true;
+function getStableId(di){ const dept=SUPABASE_STORES[di]; return dept?(dept.store_id||dept.id):null; }
+async function addChief(){
+  const n=document.getElementById('new-chief')?.value.trim();
+  if(!n){alert('名前を入力してください');return;}
+  const stableId=getStableId(S.deptIdx);
+  if(!stableId){alert('部署が取得できません。deptIdx:'+S.deptIdx+' STORES:'+SUPABASE_STORES.length);return;}
+  const newP={id:'sc_'+Date.now(),store_id:stableId,name:n,type:'chief',sort_order:(S.chiefs[`d${S.deptIdx}`]||[]).length};
+  const res=await SB('schedule_staff',{method:'POST',body:JSON.stringify(newP)});
+  if(res.ok){
+    if(!S.chiefs[`d${S.deptIdx}`])S.chiefs[`d${S.deptIdx}`]=[];
+    S.chiefs[`d${S.deptIdx}`].push(newP);
+    render();renderChiefTab();
+    document.getElementById('new-chief').value='';
+    setStatus('保存しました','saved');
+  }else{
+    const txt=await res.text();
+    alert('保存に失敗しました: '+res.status+' '+txt);
+  }
 }
+async function delChief(i){if(!confirm('削除しますか？'))return;const chiefs=S.chiefs[`d${S.deptIdx}`]||[];const p=chiefs[i];if(p&&p.id)await SB(`schedule_staff?id=eq.${encodeURIComponent(p.id)}`,{method:'DELETE'});chiefs.splice(i,1);render();renderChiefTab();}
+async function addStaff(){const n=document.getElementById('new-staff')?.value.trim();if(!n)return;const stableId=getStableId(S.deptIdx);if(!stableId)return;const newP={id:'sc_'+Date.now(),store_id:stableId,name:n,type:'staff',sort_order:(S.staff[`d${S.deptIdx}`]||[]).length};const res=await SB('schedule_staff',{method:'POST',body:JSON.stringify(newP)});if(res.ok){if(!S.staff[`d${S.deptIdx}`])S.staff[`d${S.deptIdx}`]=[];S.staff[`d${S.deptIdx}`].push(newP);render();renderStaffTab();document.getElementById('new-staff').value='';setStatus('保存しました','saved');}else{alert('保存に失敗しました');}}
+async function delStaff(i){if(!confirm('削除しますか？'))return;const staff=S.staff[`d${S.deptIdx}`]||[];const p=staff[i];if(p&&p.id)await SB(`schedule_staff?id=eq.${encodeURIComponent(p.id)}`,{method:'DELETE'});staff.splice(i,1);render();renderStaffTab();}
 
-function startApp(){
-  const sel=document.getElementById('dept-sel');
-  if(sel)sel.innerHTML=getDepts().map((d,i)=>`<option value="${i}">${d.label}</option>`).join('');
+function setView(v){S.view=v;S.offset=0;render()}
+function shiftPeriod(n){S.offset+=n;render()}
+let combinedView = false;
+function toggleCombined(){
+  combinedView = !combinedView;
+  const btn = document.getElementById('combined-btn');
+  if(btn) btn.className = 'btn' + (combinedView ? ' active' : '');
+  const sel = document.getElementById('dept-sel');
+  if(sel) sel.style.opacity = combinedView ? '0.4' : '1';
   render();
 }
-
-(async()=>{await loadData();})();
+// 合同表示時: 全部署のchiefsを結合して返す
+function getCombinedChiefs(){
+  const all = [];
+  getDepts().forEach((_,i) => getChiefs(i).forEach((c,ci) => all.push({...c, _di:i, _ci:ci})));
+  return all;
+}
+function getCombinedStaff(){
+  const all = [];
+  getDepts().forEach((_,i) => getStaff(i).forEach((s,si) => all.push({...s, _di:i, _si:si})));
+  return all;
+}
+function changeDept(){S.deptIdx=parseInt(document.getElementById('dept-sel').value);render()}
+function showModal(){document.getElementById('modal-bg').style.display='flex'}
+function closeModal(){document.getElementById('modal-bg').style.display='none';render()}
+function closeBg(e){if(e.target.id==='modal-bg'&&!_modalDragging)closeModal()}
+let _modalDragStart=null,_modalDragging=false;
+document.addEventListener('mousedown',e=>{_modalDragStart={x:e.clientX,y:e.clientY};_modalDragging=false;});
+document.addEventListener('mousemove',e=>{if(_modalDragStart&&(Math.abs(e.clientX-_modalDragStart.x)>5||Math.abs(e.clientY-_modalDragStart.y)>5))_modalDragging=true;});
+document.addEventListener('mouseup',()=>{setTimeout(()=>{_modalDragging=false;_modalDragStart=null;},100);});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
+try{const _vs=JSON.parse(localStorage.getItem('schedView')||'null');if(_vs){if(['day','week','month'].includes(_vs.view))S.view=_vs.view;if(typeof _vs.offset==='number')S.offset=_vs.offset;if(typeof _vs.deptIdx==='number')S.deptIdx=_vs.deptIdx;}}catch(e){}
+loadData();
+</script>
+<script>
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(()=>{});
+  });
+}
 </script>
 </body>
 </html>
