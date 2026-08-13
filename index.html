@@ -753,21 +753,27 @@ function onMoveDeptChange(){
   document.getElementById('mv-chief-checks').innerHTML=chiefs.map((c,i)=>`<label style="display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer;padding:6px 10px;background:var(--bg3);border-radius:8px;"><input type="checkbox" name="mv-chief-cb" value="${i}"> ${c.name}</label>`).join('');
 }
 function doMove(oldDk,oldMi,origIdx){
-  const di=S.deptIdx,sched=getCsched(di);
-  const arr=sched[`${oldDk}__${oldMi}`];if(!arr||!arr[origIdx])return;
-  const e=arr[origIdx];
+  const di=S.deptIdx,csched=getCsched(di);
+  const e=csched[`${oldDk}__${oldMi}`]?.[origIdx];
+  if(!e)return;
   const newDk=document.getElementById('mv-date').value;
   const newDi=parseInt(document.getElementById('mv-dept').value);
-  const checkedMis=[...document.querySelectorAll('input[name="mv-chief-cb"]:checked')].map(cb=>parseInt(cb.value));
+  const destMis=[...document.querySelectorAll('input[name="mv-chief-cb"]:checked')].map(cb=>parseInt(cb.value));
   if(!newDk){alert('日付を選んでください');return;}
-  if(!checkedMis.length){alert('チーフを選択してください');return;}
-  // 元の予定を削除
-  arr.splice(origIdx,1);
-  if(!arr.length)delete sched[`${oldDk}__${oldMi}`];
-  deleteFromSupabase(e.supabase_id);
-  // 選んだチーフ全員に移動先を追加
+  if(!destMis.length){alert('移動先のチーフを選択してください');return;}
+  // 編集モーダルでチェックされてたチーフの元予定を削除
+  const srcCheckedMis=[...document.querySelectorAll('input[name="f-member-cb"]:checked')].map(cb=>parseInt(cb.value));
+  const groupEntries=findGroupEntries(oldDk,e.name,e.start);
+  groupEntries.filter(g=>srcCheckedMis.includes(g.mi)).forEach(g=>{
+    const arr=csched[`${oldDk}__${g.mi}`];
+    if(!arr)return;
+    deleteFromSupabase(g.entry.supabase_id);
+    arr.splice(g.origIdx,1);
+    if(!arr.length)delete csched[`${oldDk}__${g.mi}`];
+  });
+  // 移動先に追加
   const newSched=getCsched(newDi);
-  checkedMis.forEach(newMi=>{
+  destMis.forEach(newMi=>{
     const nk=`${newDk}__${newMi}`;if(!newSched[nk])newSched[nk]=[];
     const newE={...e,supabase_id:undefined};
     newSched[nk].push(newE);
@@ -839,7 +845,7 @@ function openEdit(dk,mi,ei){
   groupMis.add(mi);
   const chiefChecks=chiefs.map((m,i)=>`<label style="display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer;padding:6px 10px;background:${groupMis.has(i)?'rgba(29,158,117,.12)':'var(--bg3)'};border-radius:8px;border:1px solid ${groupMis.has(i)?'rgba(29,158,117,.3)':'transparent'};"><input type="checkbox" name="f-member-cb" value="${i}"${groupMis.has(i)?' checked':''}> ${m.name}${groupMis.has(i)&&i!==mi?'<span style="font-size:10px;color:#1d9e75;margin-left:4px">同じ予定</span>':''}</label>`).join('');
   document.getElementById('modal-box').innerHTML=mHTML('予定を編集',`
-    <div class="field"><label>チーフ（チェック=更新、外す=削除）</label><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;">${chiefChecks}</div></div>
+    <div class="field"><label>チーフ</label><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;">${chiefChecks}</div></div>
     <div class="field"><label>現場名</label><input type="text" id="f-name" value="${e.name}" autocomplete="off" /></div>
     <div class="row2"><div class="field"><label>開始</label>${timePickerHTML('f-start',e.start||'')}</div><div class="field"><label>終了</label>${timePickerHTML('f-end',e.end||'')}</div></div>
     <div class="field"><label>備考</label><textarea id="f-note">${e.note||''}</textarea></div>
@@ -882,10 +888,10 @@ function openCopy(dk,mi,origIdx){
 
 function doCopy(e){
   const dk=document.getElementById('copy-date').value;
-  const checkedMis=[...document.querySelectorAll('input[name="copy-member-cb"]:checked')].map(cb=>parseInt(cb.value));
-  if(!checkedMis.length){alert('チーフを選択してください');return;}
+  const destMis=[...document.querySelectorAll('input[name="copy-member-cb"]:checked')].map(cb=>parseInt(cb.value));
+  if(!destMis.length){alert('コピー先のチーフを選択してください');return;}
   const sched=getCsched(S.deptIdx);
-  checkedMis.forEach(mi=>{
+  destMis.forEach(mi=>{
     const key=`${dk}__${mi}`;if(!sched[key])sched[key]=[];
     const newE={...e,repeatId:undefined,supabase_id:undefined};
     sched[key].push(newE);
