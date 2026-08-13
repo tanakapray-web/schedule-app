@@ -818,14 +818,28 @@ function toggleRepeatEnd(){
   document.getElementById('repeat-end-wrap').style.display=v==='none'?'none':'block';
 }
 
+function findGroupEntries(dk,name,start){
+  const csched=getCsched(S.deptIdx);
+  const chiefs=getChiefs(S.deptIdx);
+  const found=[];
+  chiefs.forEach((c,i)=>{
+    const entries=csched[`${dk}__${i}`]||[];
+    entries.forEach((e,idx)=>{
+      if(e.name===name&&e.start===start)found.push({mi:i,origIdx:idx,entry:e,chiefName:c.name});
+    });
+  });
+  return found;
+}
 function openEdit(dk,mi,ei){
   const sched=getCsched(S.deptIdx),entries=sched[`${dk}__${mi}`]||[],sorted=sortE(entries),e=sorted[ei];
   if(!e)return;const origIdx=entries.indexOf(e);editCtx={dk,mi,origIdx};
   const currentColor=e.color||0;
   const chiefs=getChiefs(S.deptIdx);
-  const chiefChecks=chiefs.map((m,i)=>`<label style="display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer;padding:6px 10px;background:var(--bg3);border-radius:8px;"><input type="checkbox" name="f-member-cb" value="${i}"${i===mi?' checked':''}> ${m.name}</label>`).join('');
+  const groupMis=new Set(findGroupEntries(dk,e.name,e.start).map(g=>g.mi));
+  groupMis.add(mi);
+  const chiefChecks=chiefs.map((m,i)=>`<label style="display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer;padding:6px 10px;background:${groupMis.has(i)?'rgba(29,158,117,.12)':'var(--bg3)'};border-radius:8px;border:1px solid ${groupMis.has(i)?'rgba(29,158,117,.3)':'transparent'};"><input type="checkbox" name="f-member-cb" value="${i}"${groupMis.has(i)?' checked':''}> ${m.name}${groupMis.has(i)&&i!==mi?'<span style="font-size:10px;color:#1d9e75;margin-left:4px">同じ予定</span>':''}</label>`).join('');
   document.getElementById('modal-box').innerHTML=mHTML('予定を編集',`
-    <div class="field"><label>チーフ（複数選択可）</label><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;">${chiefChecks}</div></div>
+    <div class="field"><label>チーフ（チェック=更新、外す=削除）</label><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;">${chiefChecks}</div></div>
     <div class="field"><label>現場名</label><input type="text" id="f-name" value="${e.name}" autocomplete="off" /></div>
     <div class="row2"><div class="field"><label>開始</label>${timePickerHTML('f-start',e.start||'')}</div><div class="field"><label>終了</label>${timePickerHTML('f-end',e.end||'')}</div></div>
     <div class="field"><label>備考</label><textarea id="f-note">${e.note||''}</textarea></div>
@@ -965,10 +979,25 @@ function updateEntry(){
 }
 
 function deleteEntry(){
-  if(!editCtx)return;const{dk,mi,origIdx}=editCtx,sched=getCsched(S.deptIdx),key=`${dk}__${mi}`;
-  const e=sched[key][origIdx];
-  deleteFromSupabase(e.supabase_id);
-  sched[key].splice(origIdx,1);if(!sched[key].length)delete sched[key];closeModal();render();
+  if(!editCtx)return;const{dk,mi,origIdx}=editCtx;
+  const e=getCsched(S.deptIdx)[`${dk}__${mi}`]?.[origIdx];
+  if(!e)return;
+  const checkedMis=[...document.querySelectorAll('input[name="f-member-cb"]:checked')].map(cb=>parseInt(cb.value));
+  const groupEntries=findGroupEntries(dk,e.name,e.start);
+  // チェックされたチーフ の予定を削除
+  const toDelete=groupEntries.filter(g=>checkedMis.includes(g.mi));
+  if(!toDelete.length){alert('削除するチーフを選択してください');return;}
+  const names=toDelete.map(g=>g.chiefName).join('・');
+  if(!confirm(`「${e.name}」を${names}の予定から削除しますか？`))return;
+  toDelete.forEach(g=>{
+    const csched=getCsched(S.deptIdx);
+    const arr=csched[`${dk}__${g.mi}`];
+    if(!arr)return;
+    deleteFromSupabase(g.entry.supabase_id);
+    arr.splice(g.origIdx,1);
+    if(!arr.length)delete csched[`${dk}__${g.mi}`];
+  });
+  closeModal();render();
 }
 
 function deleteRepeat(repeatId,mi){
