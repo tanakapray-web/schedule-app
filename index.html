@@ -736,11 +736,11 @@ function openMove(dk,mi,origIdx,ei){
   const depts=getDepts();
   const chiefs=getChiefs(S.deptIdx);
   const deptOpts=depts.map((d,i)=>`<option value="${i}"${i===S.deptIdx?' selected':''}>${d.label}</option>`).join('');
-  const chiefOpts=chiefs.map((c,i)=>`<option value="${i}"${i===mi?' selected':''}>${c.name}</option>`).join('');
+  const chiefChecks=chiefs.map((c,i)=>`<label style="display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer;padding:6px 10px;background:var(--bg3);border-radius:8px;"><input type="checkbox" name="mv-chief-cb" value="${i}"${i===mi?' checked':''}> ${c.name}</label>`).join('');
   document.getElementById('modal-box').innerHTML=mHTML('予定を移動',`
     <div class="field"><label>移動先の日付</label><input type="date" id="mv-date" value="${dk}" style="font-size:16px"></div>
     <div class="field"><label>移動先の部署</label><select id="mv-dept" onchange="onMoveDeptChange()" style="font-size:15px">${deptOpts}</select></div>
-    <div class="field"><label>移動先のチーフ</label><select id="mv-chief" style="font-size:15px">${chiefOpts}</select></div>
+    <div class="field"><label>移動先のチーフ（複数選択可）</label><div id="mv-chief-checks" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;">${chiefChecks}</div></div>
     <div class="modal-btns">
       <button class="btn" onclick="openEdit('${dk}',${mi},${ei})">戻る</button>
       <button class="btn primary" onclick="doMove('${dk}',${mi},${origIdx})">この内容で移動</button>
@@ -750,7 +750,7 @@ function openMove(dk,mi,origIdx,ei){
 function onMoveDeptChange(){
   const newDi=parseInt(document.getElementById('mv-dept').value);
   const chiefs=getChiefs(newDi);
-  document.getElementById('mv-chief').innerHTML=chiefs.map((c,i)=>`<option value="${i}">${c.name}</option>`).join('');
+  document.getElementById('mv-chief-checks').innerHTML=chiefs.map((c,i)=>`<label style="display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer;padding:6px 10px;background:var(--bg3);border-radius:8px;"><input type="checkbox" name="mv-chief-cb" value="${i}"> ${c.name}</label>`).join('');
 }
 function doMove(oldDk,oldMi,origIdx){
   const di=S.deptIdx,sched=getCsched(di);
@@ -758,14 +758,21 @@ function doMove(oldDk,oldMi,origIdx){
   const e=arr[origIdx];
   const newDk=document.getElementById('mv-date').value;
   const newDi=parseInt(document.getElementById('mv-dept').value);
-  const newMi=parseInt(document.getElementById('mv-chief').value);
+  const checkedMis=[...document.querySelectorAll('input[name="mv-chief-cb"]:checked')].map(cb=>parseInt(cb.value));
   if(!newDk){alert('日付を選んでください');return;}
+  if(!checkedMis.length){alert('チーフを選択してください');return;}
+  // 元の予定を削除
   arr.splice(origIdx,1);
+  if(!arr.length)delete sched[`${oldDk}__${oldMi}`];
+  deleteFromSupabase(e.supabase_id);
+  // 選んだチーフ全員に移動先を追加
   const newSched=getCsched(newDi);
-  const nk=`${newDk}__${newMi}`;
-  if(!newSched[nk])newSched[nk]=[];
-  newSched[nk].push(e);
-  saveToSupabase(e,newDk,newMi,newDi);
+  checkedMis.forEach(newMi=>{
+    const nk=`${newDk}__${newMi}`;if(!newSched[nk])newSched[nk]=[];
+    const newE={...e,supabase_id:undefined};
+    newSched[nk].push(newE);
+    saveToSupabase(newE,newDk,newMi,newDi);
+  });
   closeModal();render();
 }
 function colorSwatchHTML(sel){return ECOLORS.map((c,i)=>`<div class="color-swatch${i===sel?' selected':''}" style="background:${c.dot}" onclick="selColor(${i})" title="${c.label}"></div>`).join('')}
@@ -851,21 +858,25 @@ function openCopy(dk,mi,origIdx){
   let dateOpts='';
   const days=S.view==='week'?7:S.view==='month'?new Date(base.getFullYear(),base.getMonth()+1,0).getDate():1;
   for(let i=0;i<days;i++){const d=new Date(base);d.setDate(d.getDate()+i);dateOpts+=`<option value="${dateKey(d)}">${fmtS(d)}（${fmtDow(d)}）</option>`}
+  const chiefChecks=chiefs.map((m,i)=>`<label style="display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer;padding:6px 10px;background:var(--bg3);border-radius:8px;"><input type="checkbox" name="copy-member-cb" value="${i}"${i===mi?' checked':''}> ${m.name}</label>`).join('');
   document.getElementById('modal-box').innerHTML=mHTML('コピーして別日に登録',`
     <div class="field"><label>コピー元</label><div style="font-size:14px;font-weight:500;padding:8px;background:#f8f7f4;border-radius:8px">${e.name}${e.start?' ('+e.start+(e.end?'〜'+e.end:'')+')'  :''}</div></div>
     <div class="field"><label>コピー先の日付</label><select id="copy-date">${dateOpts}</select></div>
-    <div class="field"><label>コピー先のチーフ</label><select id="copy-member">${chiefs.map((m,i)=>`<option value="${i}"${i===mi?' selected':''}>${m.name}</option>`).join('')}</select></div>
+    <div class="field"><label>コピー先のチーフ（複数選択可）</label><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;">${chiefChecks}</div></div>
     <div class="modal-btns"><button class="btn" onclick="openEdit('${dk}',${mi},${origIdx})">戻る</button><button class="btn primary" onclick="doCopy(${JSON.stringify(e).replace(/"/g,'&quot;')})">登録</button></div>`);
 }
 
 function doCopy(e){
   const dk=document.getElementById('copy-date').value;
-  const mi=parseInt(document.getElementById('copy-member').value);
-  const sched=getCsched(S.deptIdx),key=`${dk}__${mi}`;
-  if(!sched[key])sched[key]=[];
-  const newE={...e,repeatId:undefined,supabase_id:undefined};
-  sched[key].push(newE);
-  saveToSupabase(newE, dk, mi);
+  const checkedMis=[...document.querySelectorAll('input[name="copy-member-cb"]:checked')].map(cb=>parseInt(cb.value));
+  if(!checkedMis.length){alert('チーフを選択してください');return;}
+  const sched=getCsched(S.deptIdx);
+  checkedMis.forEach(mi=>{
+    const key=`${dk}__${mi}`;if(!sched[key])sched[key]=[];
+    const newE={...e,repeatId:undefined,supabase_id:undefined};
+    sched[key].push(newE);
+    saveToSupabase(newE,dk,mi);
+  });
   closeModal();render();
 }
 
