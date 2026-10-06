@@ -515,6 +515,16 @@ function getDepts(){
 }
 function getChiefs(di){if(!S.chiefs[dkey(di)])S.chiefs[dkey(di)]=[];return S.chiefs[dkey(di)]}
 function getStaff(di){if(!S.staff[dkey(di)])S.staff[dkey(di)]=[];return S.staff[dkey(di)]}
+// 表示月文字列を返す (YYYY-MM)
+function getViewMonthStr(date){return`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`}
+// 退職者を除いた表示用チーフ配列（_idx=元の安定インデックス）
+function getDisplayChiefs(di,viewMonth){
+  return getChiefs(di).map((c,i)=>({...c,_idx:i})).filter(c=>!c.retired_from||c.retired_from>=viewMonth);
+}
+// 退職者を除いた表示用スタッフ配列（_idx=元の安定インデックス）
+function getDisplayStaff(di,viewMonth){
+  return getStaff(di).map((s,i)=>({...s,_idx:i})).filter(s=>!s.retired_from||s.retired_from>=viewMonth);
+}
 function getCsched(di){if(!S.csched[dkey(di)])S.csched[dkey(di)]={};return S.csched[dkey(di)]}
 function getSsched(di){if(!S.ssched[dkey(di)])S.ssched[dkey(di)]={};return S.ssched[dkey(di)]}
 
@@ -574,7 +584,8 @@ function render(){
 
 function makeChiefCells(dk,di,wk,chiefs,csched){
   let h='';
-  chiefs.forEach((_,mi)=>{
+  chiefs.forEach((chief,_)=>{
+    const mi=chief._idx!==undefined?chief._idx:_;  // 安定インデックスを使用
     const entries=sortE(csched[`${dk}__${mi}`]||[]);
     h+=`<td class="td-chief${wk?' weekend':''}">`;
     entries.forEach((e,ei)=>{
@@ -597,7 +608,9 @@ function makeChiefCells(dk,di,wk,chiefs,csched){
 
 function makeStaffCells(dk,di,wk,staff,ssched){
   let h='';
-  staff.forEach((_,si)=>{const v=ssched[`${dk}__${si}`]||'';
+  staff.forEach((sv,_)=>{
+    const si=sv._idx!==undefined?sv._idx:_;  // 安定インデックスを使用
+    const v=ssched[`${dk}__${si}`]||'';
     h+=`<td class="td-staff${wk?' weekend':''}" onclick="toggleStaff('${dk}',${si})">`;
     if(v==='出勤')h+=`<span class="staff-badge badge-on">出</span>`;
     else if(v==='休日')h+=`<span class="staff-badge badge-off">休</span>`;
@@ -610,15 +623,19 @@ function renderTableHead(chiefs,staff){
   if(chiefs.length)h+=`<th class="th-section" colspan="${chiefs.length}" style="background:#e6f1fb;color:#0c447c">チーフ</th>`;
   if(staff.length)h+=`<th class="th-section" colspan="${staff.length}" style="background:#f1efe8;color:#5f5e5a">スタッフ</th>`;
   h+='</tr><tr><th class="th-date">日付</th>';
-  chiefs.forEach((m,mi)=>h+=`<th class="th-chief"><div class="avatar" style="background:${CAVS[mi%8]}">${m.name[0]}</div>${m.name}</th>`);
+  chiefs.forEach((m,mi)=>{
+    const colorIdx=m._idx!==undefined?m._idx:mi;  // 安定した色を維持
+    h+=`<th class="th-chief"><div class="avatar" style="background:${CAVS[colorIdx%8]}">${m.name[0]}</div>${m.name}</th>`;
+  });
   staff.forEach(s=>h+=`<th class="th-staff" title="${s.name}">${s.name.slice(0,2)}</th>`);
   return h+'</tr></thead>';
 }
 
 function renderWeek(mon){
   const di=S.deptIdx;
-  const chiefs = combinedView ? getCombinedChiefs() : getChiefs(di);
-  const staff  = combinedView ? getCombinedStaff()  : getStaff(di);
+  const viewMonth=getViewMonthStr(mon);
+  const chiefs = combinedView ? getCombinedChiefs(viewMonth) : getDisplayChiefs(di,viewMonth);
+  const staff  = combinedView ? getCombinedStaff(viewMonth)  : getDisplayStaff(di,viewMonth);
   const dates=Array.from({length:7},(_,i)=>{const d=new Date(mon);d.setDate(d.getDate()+i);return d});
   let h=`<div class="table-wrap"><table>${renderTableHead(chiefs,staff)}<tbody>`;
   dates.forEach(d=>{const dk=dateKey(d),wk=isWeekend(d),tod=isToday(d);
@@ -637,8 +654,9 @@ function renderWeek(mon){
 function renderMonth(first){
   const di=S.deptIdx,year=first.getFullYear(),month=first.getMonth();
   const lastDay=new Date(year,month+1,0).getDate();
-  const chiefs = combinedView ? getCombinedChiefs() : getChiefs(di);
-  const staff  = combinedView ? getCombinedStaff()  : getStaff(di);
+  const viewMonth=getViewMonthStr(first);
+  const chiefs = combinedView ? getCombinedChiefs(viewMonth) : getDisplayChiefs(di,viewMonth);
+  const staff  = combinedView ? getCombinedStaff(viewMonth)  : getDisplayStaff(di,viewMonth);
   let h=`<div class="table-wrap"><table>${renderTableHead(chiefs,staff)}<tbody>`;
   for(let day=1;day<=lastDay;day++){
     const d=new Date(year,month,day),dk=dateKey(d),wk=isWeekend(d),tod=isToday(d);
@@ -655,15 +673,16 @@ function renderMonth(first){
 
 function renderDay(d){
   const di=S.deptIdx;
-  const chiefs = combinedView ? getCombinedChiefs() : getChiefs(di);
-  const staff  = combinedView ? getCombinedStaff()  : getStaff(di);
+  const viewMonth=getViewMonthStr(d);
+  const chiefs = combinedView ? getCombinedChiefs(viewMonth) : getDisplayChiefs(di,viewMonth);
+  const staff  = combinedView ? getCombinedStaff(viewMonth)  : getDisplayStaff(di,viewMonth);
   const dk=dateKey(d);
   let h='';
   if(chiefs.length){
     h+='<div class="day-section-label">チーフ</div>';
     chiefs.forEach((m,mi)=>{
       const cdi = combinedView ? m._di : di;
-      const cmi = combinedView ? m._ci : mi;
+      const cmi = combinedView ? m._ci : (m._idx!==undefined?m._idx:mi);  // 安定インデックス
       const entries=sortE((getCsched(cdi)[`${dk}__${cmi}`])||[]);
       h+=`<div class="day-chief-row"><div class="day-chief-head"><div class="avatar" style="display:inline-flex;width:28px;height:28px;background:${CAVS[mi%8]};font-size:12px">${m.name[0]}</div><span style="flex:1;font-size:15px">${m.name}</span><button class="btn primary" style="padding:8px 12px;font-size:13px;min-height:40px" onclick="openAdd('${dk}',${cmi})"><i class="ti ti-plus"></i> 追加</button></div><div class="day-entries-wrap">`;
       if(!entries.length)h+=`<span style="font-size:13px;color:#bbb">予定なし</span>`;
@@ -688,7 +707,7 @@ function renderDay(d){
     h+='<div class="day-section-label" style="margin-top:1rem">スタッフ出勤</div>';
     staff.forEach((sv,si)=>{
       const sdi = combinedView ? sv._di : di;
-      const ssi = combinedView ? sv._si : si;
+      const ssi = combinedView ? sv._si : (sv._idx!==undefined?sv._idx:si);  // 安定インデックス
       const ss = getSsched(sdi);
       const today_dk = dateKey(d);
       const val = ss[`${today_dk}__${ssi}`]||'';
@@ -1151,7 +1170,17 @@ async function delSchedDept(i){
 function renderChiefTab(){
   const di=S.deptIdx,depts=getDepts(),chiefs=getChiefs(di);
   let h=`<div class="field"><label>対象部署</label><select onchange="S.deptIdx=parseInt(this.value);setTab('chief')">${depts.map((d,i)=>`<option value="${i}"${i===di?' selected':''}>${d.label}</option>`).join('')}</select></div>`;
-  h+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">'+chiefs.map((m,i)=>`<div class="chip"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${CAVS[i%8]}"></span>${m.name}<button onclick="delChief(${i})"><i class="ti ti-x"></i></button></div>`).join('')+'</div>';
+  h+='<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px">';
+  chiefs.forEach((m,i)=>{
+    if(m.retired_from){
+      const ym=m.retired_from.slice(0,7);
+      h+=`<div class="chip" style="opacity:.55;background:#f0f0f0"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${CAVS[i%8]}"></span>${m.name}<span style="font-size:11px;color:#999;margin:0 4px">（${ym.replace('-','年')}月〜退職）</span><button onclick="unretireChief(${i})" title="退職取消" style="font-size:11px;padding:2px 6px;color:#555"><i class="ti ti-refresh"></i> 取消</button></div>`;
+    } else {
+      h+=`<div class="chip"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${CAVS[i%8]}"></span>${m.name}<button onclick="showRetireChiefInput(${i})" title="退職処理"><i class="ti ti-logout"></i></button></div>`;
+      h+=`<div id="retire-c-${i}" style="display:none;padding:4px 8px;background:#fff7f0;border-radius:8px;border:1px solid #fcd;font-size:13px">退職月: <input type="month" id="retire-c-month-${i}" value="${new Date().toISOString().slice(0,7)}" style="border:1px solid #ccc;border-radius:4px;padding:3px 6px"> <button onclick="confirmRetireChief(${i})" class="btn primary" style="padding:4px 10px;font-size:12px;min-height:0;margin-left:6px">確定</button> <button onclick="document.getElementById('retire-c-${i}').style.display='none'" style="padding:4px 6px;font-size:12px">✕</button></div>`;
+    }
+  });
+  h+='</div>';
   h+=`<div class="inline-row"><input type="text" id="new-chief" placeholder="チーフ名" style="flex:1" /><button class="btn primary" style="min-height:48px;padding:8px 16px;font-size:14px" onclick="addChief()"><i class="ti ti-plus"></i> 追加</button></div>`;
   h+=`<div class="modal-btns"><button class="btn primary" onclick="closeModal()">完了</button></div>`;
   document.getElementById('set-body').innerHTML=h;setTimeout(()=>document.getElementById('new-chief')?.focus(),100);
@@ -1159,7 +1188,17 @@ function renderChiefTab(){
 function renderStaffTab(){
   const di=S.deptIdx,depts=getDepts(),staff=getStaff(di);
   let h=`<div class="field"><label>対象部署</label><select onchange="S.deptIdx=parseInt(this.value);setTab('staff')">${depts.map((d,i)=>`<option value="${i}"${i===di?' selected':''}>${d.label}</option>`).join('')}</select></div>`;
-  h+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">'+staff.map((s,i)=>`<div class="chip">${s.name}<button onclick="delStaff(${i})"><i class="ti ti-x"></i></button></div>`).join('')+'</div>';
+  h+='<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px">';
+  staff.forEach((s,i)=>{
+    if(s.retired_from){
+      const ym=s.retired_from.slice(0,7);
+      h+=`<div class="chip" style="opacity:.55;background:#f0f0f0">${s.name}<span style="font-size:11px;color:#999;margin:0 4px">（${ym.replace('-','年')}月〜退職）</span><button onclick="unretireStaff(${i})" title="退職取消" style="font-size:11px;padding:2px 6px;color:#555"><i class="ti ti-refresh"></i> 取消</button></div>`;
+    } else {
+      h+=`<div class="chip">${s.name}<button onclick="showRetireStaffInput(${i})" title="退職処理"><i class="ti ti-logout"></i></button></div>`;
+      h+=`<div id="retire-s-${i}" style="display:none;padding:4px 8px;background:#fff7f0;border-radius:8px;border:1px solid #fcd;font-size:13px">退職月: <input type="month" id="retire-s-month-${i}" value="${new Date().toISOString().slice(0,7)}" style="border:1px solid #ccc;border-radius:4px;padding:3px 6px"> <button onclick="confirmRetireStaff(${i})" class="btn primary" style="padding:4px 10px;font-size:12px;min-height:0;margin-left:6px">確定</button> <button onclick="document.getElementById('retire-s-${i}').style.display='none'" style="padding:4px 6px;font-size:12px">✕</button></div>`;
+    }
+  });
+  h+='</div>';
   h+=`<div class="inline-row"><input type="text" id="new-staff" placeholder="スタッフ名" style="flex:1" /><button class="btn primary" style="min-height:48px;padding:8px 16px;font-size:14px" onclick="addStaff()"><i class="ti ti-plus"></i> 追加</button></div>`;
   h+=`<div class="modal-btns"><button class="btn primary" onclick="closeModal()">完了</button></div>`;
   document.getElementById('set-body').innerHTML=h;setTimeout(()=>document.getElementById('new-staff')?.focus(),100);
@@ -1280,9 +1319,53 @@ async function addChief(){
     alert('保存に失敗しました: '+res.status+' '+txt);
   }
 }
-async function delChief(i){if(!confirm('削除しますか？'))return;const chiefs=S.chiefs[`d${S.deptIdx}`]||[];const p=chiefs[i];if(p&&p.id)await SB(`schedule_staff?id=eq.${encodeURIComponent(p.id)}`,{method:'DELETE'});chiefs.splice(i,1);render();renderChiefTab();}
+// チーフ退職UIを表示
+function showRetireChiefInput(i){
+  const el=document.getElementById(`retire-c-${i}`);
+  if(el){el.style.display='block';el.querySelector('input[type=month]')?.focus();}
+}
+// チーフ退職確定
+async function confirmRetireChief(i){
+  const month=document.getElementById(`retire-c-month-${i}`)?.value;
+  if(!month)return;
+  const chiefs=S.chiefs[`d${S.deptIdx}`]||[];
+  const p=chiefs[i];if(!p)return;
+  const res=await SB(`schedule_staff?id=eq.${encodeURIComponent(p.id)}`,{method:'PATCH',body:JSON.stringify({retired_from:month})});
+  if(res.ok){chiefs[i].retired_from=month;render();renderChiefTab();setStatus(`${p.name} を${month.replace('-','年')}月〜退職にしました`,'saved');}
+  else{alert('保存に失敗しました');}
+}
+// チーフ退職取消
+async function unretireChief(i){
+  const chiefs=S.chiefs[`d${S.deptIdx}`]||[];
+  const p=chiefs[i];if(!p||!confirm(`${p.name}の退職を取り消しますか？`))return;
+  const res=await SB(`schedule_staff?id=eq.${encodeURIComponent(p.id)}`,{method:'PATCH',body:JSON.stringify({retired_from:null})});
+  if(res.ok){chiefs[i].retired_from=null;render();renderChiefTab();setStatus('退職を取り消しました','saved');}
+  else{alert('保存に失敗しました');}
+}
 async function addStaff(){const n=document.getElementById('new-staff')?.value.trim();if(!n)return;const stableId=getStableId(S.deptIdx);if(!stableId)return;const newP={id:'sc_'+Date.now(),store_id:stableId,name:n,type:'staff',sort_order:(S.staff[`d${S.deptIdx}`]||[]).length};const res=await SB('schedule_staff',{method:'POST',body:JSON.stringify(newP)});if(res.ok){if(!S.staff[`d${S.deptIdx}`])S.staff[`d${S.deptIdx}`]=[];S.staff[`d${S.deptIdx}`].push(newP);render();renderStaffTab();document.getElementById('new-staff').value='';setStatus('保存しました','saved');}else{alert('保存に失敗しました');}}
-async function delStaff(i){if(!confirm('削除しますか？'))return;const staff=S.staff[`d${S.deptIdx}`]||[];const p=staff[i];if(p&&p.id)await SB(`schedule_staff?id=eq.${encodeURIComponent(p.id)}`,{method:'DELETE'});staff.splice(i,1);render();renderStaffTab();}
+// スタッフ退職UIを表示
+function showRetireStaffInput(i){
+  const el=document.getElementById(`retire-s-${i}`);
+  if(el){el.style.display='block';el.querySelector('input[type=month]')?.focus();}
+}
+// スタッフ退職確定
+async function confirmRetireStaff(i){
+  const month=document.getElementById(`retire-s-month-${i}`)?.value;
+  if(!month)return;
+  const staff=S.staff[`d${S.deptIdx}`]||[];
+  const p=staff[i];if(!p)return;
+  const res=await SB(`schedule_staff?id=eq.${encodeURIComponent(p.id)}`,{method:'PATCH',body:JSON.stringify({retired_from:month})});
+  if(res.ok){staff[i].retired_from=month;render();renderStaffTab();setStatus(`${p.name} を${month.replace('-','年')}月〜退職にしました`,'saved');}
+  else{alert('保存に失敗しました');}
+}
+// スタッフ退職取消
+async function unretireStaff(i){
+  const staff=S.staff[`d${S.deptIdx}`]||[];
+  const p=staff[i];if(!p||!confirm(`${p.name}の退職を取り消しますか？`))return;
+  const res=await SB(`schedule_staff?id=eq.${encodeURIComponent(p.id)}`,{method:'PATCH',body:JSON.stringify({retired_from:null})});
+  if(res.ok){staff[i].retired_from=null;render();renderStaffTab();setStatus('退職を取り消しました','saved');}
+  else{alert('保存に失敗しました');}
+}
 
 function setView(v){S.view=v;S.offset=0;render()}
 function shiftPeriod(n){S.offset+=n;render()}
@@ -1296,14 +1379,20 @@ function toggleCombined(){
   render();
 }
 // 合同表示時: 全部署のchiefsを結合して返す
-function getCombinedChiefs(){
+function getCombinedChiefs(viewMonth){
   const all = [];
-  getDepts().forEach((_,i) => getChiefs(i).forEach((c,ci) => all.push({...c, _di:i, _ci:ci})));
+  getDepts().forEach((_,i) => {
+    const chiefs = viewMonth ? getDisplayChiefs(i,viewMonth) : getChiefs(i).map((c,idx)=>({...c,_idx:idx}));
+    chiefs.forEach(c => all.push({...c, _di:i, _ci:c._idx}));
+  });
   return all;
 }
-function getCombinedStaff(){
+function getCombinedStaff(viewMonth){
   const all = [];
-  getDepts().forEach((_,i) => getStaff(i).forEach((s,si) => all.push({...s, _di:i, _si:si})));
+  getDepts().forEach((_,i) => {
+    const staff = viewMonth ? getDisplayStaff(i,viewMonth) : getStaff(i).map((s,idx)=>({...s,_idx:idx}));
+    staff.forEach(s => all.push({...s, _di:i, _si:s._idx}));
+  });
   return all;
 }
 function changeDept(){S.deptIdx=parseInt(document.getElementById('dept-sel').value);render()}
