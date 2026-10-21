@@ -1176,7 +1176,13 @@ function renderChiefTab(){
       const ym=m.retired_from.slice(0,7);
       h+=`<div class="chip" style="opacity:.55;background:#f0f0f0"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${CAVS[i%8]}"></span>${m.name}<span style="font-size:11px;color:#999;margin:0 4px">（${ym.replace('-','年')}月〜退職）</span><button onclick="unretireChief(${i})" title="退職取消" style="font-size:11px;padding:2px 6px;color:#555"><i class="ti ti-refresh"></i> 取消</button></div>`;
     } else {
-      h+=`<div class="chip"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${CAVS[i%8]}"></span>${m.name}<button onclick="showRetireChiefInput(${i})" title="退職処理"><i class="ti ti-logout"></i></button></div>`;
+      const stBadge=m.is_st?`<span style="font-size:10px;font-weight:700;background:#7c3aed;color:#fff;border-radius:4px;padding:1px 5px;margin-left:4px">ST</span>`:'';
+      h+=`<div class="chip" style="align-items:center;gap:6px">`;
+      h+=`<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${CAVS[i%8]}"></span>`;
+      h+=`${m.name}${stBadge}`;
+      h+=`<label style="display:flex;align-items:center;gap:3px;font-size:11px;color:#7c3aed;cursor:pointer;margin-left:4px"><input type="checkbox" ${m.is_st?'checked':''} onchange="toggleChiefST(${i},this.checked)" style="accent-color:#7c3aed">ST</label>`;
+      h+=`<button onclick="showRetireChiefInput(${i})" title="退職処理"><i class="ti ti-logout"></i></button>`;
+      h+=`</div>`;
       h+=`<div id="retire-c-${i}" style="display:none;padding:4px 8px;background:#fff7f0;border-radius:8px;border:1px solid #fcd;font-size:13px">退職月: <input type="month" id="retire-c-month-${i}" value="${new Date().toISOString().slice(0,7)}" style="border:1px solid #ccc;border-radius:4px;padding:3px 6px"> <button onclick="confirmRetireChief(${i})" class="btn primary" style="padding:4px 10px;font-size:12px;min-height:0;margin-left:6px">確定</button> <button onclick="document.getElementById('retire-c-${i}').style.display='none'" style="padding:4px 6px;font-size:12px">✕</button></div>`;
     }
   });
@@ -1318,6 +1324,14 @@ async function addChief(){
     const txt=await res.text();
     alert('保存に失敗しました: '+res.status+' '+txt);
   }
+}
+// チーフのST（業務委託）フラグを切り替え
+async function toggleChiefST(i, val){
+  const chiefs=S.chiefs[`d${S.deptIdx}`]||[];
+  const p=chiefs[i];if(!p)return;
+  const res=await SB(`schedule_staff?id=eq.${encodeURIComponent(p.id)}`,{method:'PATCH',body:JSON.stringify({is_st:val})});
+  if(res.ok){chiefs[i].is_st=val;renderChiefTab();setStatus(val?`${p.name} をSTに設定しました`:`${p.name} のSTを解除しました`,'saved');}
+  else{alert('保存に失敗しました');}
 }
 // チーフ退職UIを表示
 function showRetireChiefInput(i){
