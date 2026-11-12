@@ -1,0 +1,1 @@
+window.ONBOARDING_CONFIG=Object.freeze({"enabled":true,"environment":"hosted-pilot","supabaseUrl":"https://nxaepscqkxpldvunbhri.supabase.co","publishableKey":"sb_publishable_9sDcDJjq0wCdAP_9AkEXeQ_tvectEFa"});
